@@ -1,0 +1,217 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_phoenix/flutter_phoenix.dart';
+import 'core/theme/app_theme.dart';
+import 'core/services/storage_service.dart';
+import 'core/services/mongodb_service.dart';
+import 'features/home/home_screen.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
+
+  // Initialiser le service de stockage
+  await StorageService().init();
+
+  try {
+    // Initialiser la connexion MongoDB
+    print('🔄 Initialisation de la base de données...');
+    await MongoDbService.instance.connect();
+    print('✅ Base de données connectée avec succès!');
+
+    // Tester la connexion
+    final isConnected = await MongoDbService.instance.testConnection();
+    if (isConnected) {
+      print('✅ Test de connexion réussi!');
+    } else {
+      print('⚠️ Test de connexion échoué, mais l\'app continue...');
+    }
+  } catch (e) {
+    print('❌ Erreur de connexion à la base de données: $e');
+    print(
+      '💡 Assurez-vous que MongoDB est démarré avec ./start_database.sh ou start_database.bat',
+    );
+  }
+
+  runApp(Phoenix(child: const ProviderScope(child: MyApp())));
+}
+
+class MyApp extends ConsumerWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return ScreenUtilInit(
+      designSize: const Size(375, 812),
+      minTextAdapt: true,
+      splitScreenMode: true,
+      builder: (context, child) {
+        return MaterialApp(
+          title: 'Géolocalisation Cotonou',
+          debugShowCheckedModeBanner: false,
+          theme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: AppColors.primary,
+              brightness: Brightness.light,
+            ),
+            textTheme: GoogleFonts.robotoTextTheme(Theme.of(context).textTheme),
+            appBarTheme: AppBarTheme(
+              backgroundColor: AppColors.primary,
+              foregroundColor: AppColors.textLight,
+              elevation: 0,
+              centerTitle: true,
+              titleTextStyle: AppTextStyles.h4.copyWith(
+                color: AppColors.textLight,
+              ),
+            ),
+            elevatedButtonTheme: ElevatedButtonThemeData(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: AppColors.textLight,
+                minimumSize: Size(
+                  AppDimensions.buttonMinWidth,
+                  AppDimensions.buttonHeight,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppDimensions.radiusL),
+                ),
+                textStyle: AppTextStyles.buttonLarge,
+              ),
+            ),
+            cardTheme: CardThemeData(
+              elevation: AppDimensions.cardElevation,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppDimensions.cardRadius),
+              ),
+            ),
+            inputDecorationTheme: InputDecorationTheme(
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppDimensions.radiusL),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppDimensions.radiusL),
+                borderSide: const BorderSide(color: AppColors.primary),
+              ),
+            ),
+            useMaterial3: true,
+          ),
+          home: const HomeScreen(),
+        );
+      },
+    );
+  }
+}
+
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  bool _isConnected = false;
+  String _connectionStatus = 'Vérification...';
+
+  @override
+  void initState() {
+    super.initState();
+    _checkConnection();
+  }
+
+  Future<void> _checkConnection() async {
+    try {
+      final isConnected = MongoDbService.instance.isConnected;
+      setState(() {
+        _isConnected = isConnected;
+        _connectionStatus = isConnected
+            ? 'Connecté à MongoDB ✅'
+            : 'Non connecté à MongoDB ❌';
+      });
+    } catch (e) {
+      setState(() {
+        _isConnected = false;
+        _connectionStatus = 'Erreur de connexion: $e';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        title: const Text('Application de Localisation'),
+      ),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              _isConnected ? Icons.check_circle : Icons.error,
+              size: 64,
+              color: _isConnected ? Colors.green : Colors.red,
+            ),
+            const SizedBox(height: 20),
+            Text(
+              _connectionStatus,
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 20),
+            if (!_isConnected) ...[
+              const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text(
+                  'Pour démarrer MongoDB:\n\n'
+                  '• Windows: Double-cliquez sur start_database.bat\n'
+                  '• Linux/Mac: Exécutez ./start_database.sh\n'
+                  '• Ou lancez: docker-compose up -d',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 14),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: _checkConnection,
+                child: const Text('Vérifier la connexion'),
+              ),
+            ],
+            if (_isConnected) ...[
+              const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text(
+                  'Base de données prête!\n'
+                  'Vous pouvez maintenant utiliser l\'application.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 14),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  // TODO: Naviguer vers la page principale de l'app
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Interface principale en cours de développement...',
+                      ),
+                    ),
+                  );
+                },
+                child: const Text('Commencer'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    // Fermer la connexion MongoDB quand l'app se ferme
+    MongoDbService.instance.disconnect();
+    super.dispose();
+  }
+}

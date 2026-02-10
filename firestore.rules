@@ -1,0 +1,104 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Règles de base pour les utilisateurs
+    match /users/{userId} {
+      // Les utilisateurs peuvent lire leur propre profil
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      // Les admins peuvent lire tous les profils
+      allow read: if request.auth != null && 
+        request.auth.token.role in ['admin', 'super_admin'];
+      
+      // Les super admins peuvent modifier tous les profils
+      allow write: if request.auth != null && 
+        request.auth.token.role == 'super_admin';
+    }
+    
+    // Règles pour les lieux/infrastructures
+    match /lieux/{lieuId} {
+      // Tout le monde peut lire les lieux (public)
+      allow read: if true;
+      
+      // Les utilisateurs connectés peuvent créer des lieux
+      allow create: if request.auth != null;
+      
+      // Le créateur et les admins peuvent modifier
+      allow update: if request.auth != null && (
+        resource.data.createdBy == request.auth.uid ||
+        request.auth.token.role in ['admin', 'super_admin']
+      );
+      
+      // Seuls les admins peuvent supprimer
+      allow delete: if request.auth != null && 
+        request.auth.token.role in ['admin', 'super_admin'];
+    }
+    
+    // Règles pour les contributions
+    match /contributions/{contributionId} {
+      // Les admins peuvent lire toutes les contributions
+      allow read: if request.auth != null && 
+        request.auth.token.role in ['admin', 'super_admin'];
+      
+      // Les utilisateurs peuvent lire leurs propres contributions
+      allow read: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+      
+      // Les utilisateurs peuvent créer des contributions
+      allow create: if request.auth != null;
+      
+      // Le créateur et les admins peuvent modifier
+      allow update: if request.auth != null && (
+        resource.data.userId == request.auth.uid ||
+        request.auth.token.role in ['admin', 'super_admin']
+      );
+      
+      // Seuls les admins peuvent supprimer
+      allow delete: if request.auth != null && 
+        request.auth.token.role in ['admin', 'super_admin'];
+    }
+    
+    // Règles pour les favoris
+    match /favoris/{userId} {
+      // Seul l'utilisateur concerné peut accéder à ses favoris
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Règles pour les notifications
+    match /notifications/{notificationId} {
+      // Le destinataire peut lire ses notifications
+      allow read: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+      
+      // Les admins peuvent lire toutes les notifications
+      allow read: if request.auth != null && 
+        request.auth.token.role in ['admin', 'super_admin'];
+      
+      // Seuls les admins peuvent créer des notifications
+      allow create: if request.auth != null && 
+        request.auth.token.role in ['admin', 'super_admin'];
+      
+      // Le destinataire peut marquer comme lu
+      allow update: if request.auth != null && 
+        resource.data.userId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+    }
+    
+    // Règles pour les paramètres de l'application
+    match /settings/{settingId} {
+      // Tout le monde peut lire les paramètres publics
+      allow read: if true;
+      
+      // Seuls les super admins peuvent modifier
+      allow write: if request.auth != null && 
+        request.auth.token.role == 'super_admin';
+    }
+    
+    // Règles pour les rapports et analyses
+    match /analytics/{documentId} {
+      // Seuls les admins peuvent accéder aux analytics
+      allow read, write: if request.auth != null && 
+        request.auth.token.role in ['admin', 'super_admin'];
+    }
+  }
+}

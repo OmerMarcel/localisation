@@ -1,0 +1,211 @@
+import 'package:flutter/material.dart';
+import '../core/models/contribution.dart';
+import '../core/repositories/contribution_repository.dart';
+import '../core/services/mongodb_service.dart';
+
+class ContributionService {
+  final ContributionRepository _repository = ContributionRepository();
+
+  /// Créer une nouvelle contribution
+  Future<Contribution> createContribution({
+    required String userId,
+    required String name,
+    required String description,
+    required String category,
+    required double latitude,
+    required double longitude,
+    required String address,
+    List<String>? images,
+    Map<String, dynamic>? openingHours,
+    String? phone,
+    String? website,
+  }) async {
+    try {
+      // S'assurer que MongoDB est connecté
+      if (!MongoDbService.instance.isConnected) {
+        await MongoDbService.instance.connect();
+      }
+
+      // Créer l'objet Contribution
+      final contribution = Contribution(
+        userId: userId,
+        name: name,
+        description: description,
+        category: category,
+        latitude: latitude,
+        longitude: longitude,
+        address: address,
+        images: images ?? [],
+        openingHours: openingHours ?? {},
+        phone: phone,
+        website: website,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      // Envoyer vers la base de données
+      final savedContribution = await _repository.create(contribution);
+
+      print('✅ Contribution créée avec succès : ${savedContribution.id}');
+      return savedContribution;
+    } catch (e) {
+      print('❌ Erreur lors de la création : $e');
+      rethrow;
+    }
+  }
+
+  /// Récupérer toutes les contributions
+  Future<List<Contribution>> getAllContributions() async {
+    try {
+      return await _repository.getAll();
+    } catch (e) {
+      print('❌ Erreur récupération : $e');
+      return [];
+    }
+  }
+
+  /// Rechercher des contributions près d'une position
+  Future<List<Contribution>> getNearbyContributions({
+    required double latitude,
+    required double longitude,
+    double radiusKm = 10.0,
+  }) async {
+    try {
+      return await _repository.getNearby(
+        latitude: latitude,
+        longitude: longitude,
+        radiusKm: radiusKm,
+      );
+    } catch (e) {
+      print('❌ Erreur recherche géolocalisée : $e');
+      return [];
+    }
+  }
+
+  /// Mettre à jour une contribution
+  Future<Contribution?> updateContribution(
+    String id,
+    Contribution contribution,
+  ) async {
+    try {
+      return await _repository.update(id, contribution);
+    } catch (e) {
+      print('❌ Erreur mise à jour : $e');
+      return null;
+    }
+  }
+}
+
+/// Widget exemple pour créer une contribution
+class CreateContributionWidget extends StatefulWidget {
+  const CreateContributionWidget({super.key});
+
+  @override
+  State<CreateContributionWidget> createState() =>
+      _CreateContributionWidgetState();
+}
+
+class _CreateContributionWidgetState extends State<CreateContributionWidget> {
+  final ContributionService _contributionService = ContributionService();
+  final _formKey = GlobalKey<FormState>();
+
+  final _nameController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final _addressController = TextEditingController();
+  final _categoryController = TextEditingController();
+
+  bool _isLoading = false;
+
+  /// Envoyer les données vers MongoDB
+  Future<void> _submitContribution() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      await _contributionService.createContribution(
+        userId: "user123", // À remplacer par l'ID utilisateur réel
+        name: _nameController.text,
+        description: _descriptionController.text,
+        category: _categoryController.text,
+        latitude: 48.8566, // À remplacer par la vraie position
+        longitude: 2.3522,
+        address: _addressController.text,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('✅ Contribution envoyée vers MongoDB!')),
+        );
+
+        // Réinitialiser le formulaire
+        _formKey.currentState!.reset();
+        _nameController.clear();
+        _descriptionController.clear();
+        _addressController.clear();
+        _categoryController.clear();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('❌ Erreur : $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Créer une contribution')),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              TextFormField(
+                controller: _nameController,
+                decoration: const InputDecoration(labelText: 'Nom du lieu'),
+                validator: (value) => value?.isEmpty ?? true ? 'Requis' : null,
+              ),
+              TextFormField(
+                controller: _descriptionController,
+                decoration: const InputDecoration(labelText: 'Description'),
+                validator: (value) => value?.isEmpty ?? true ? 'Requis' : null,
+              ),
+              TextFormField(
+                controller: _categoryController,
+                decoration: const InputDecoration(labelText: 'Catégorie'),
+                validator: (value) => value?.isEmpty ?? true ? 'Requis' : null,
+              ),
+              TextFormField(
+                controller: _addressController,
+                decoration: const InputDecoration(labelText: 'Adresse'),
+                validator: (value) => value?.isEmpty ?? true ? 'Requis' : null,
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: _isLoading ? null : _submitContribution,
+                child: _isLoading
+                    ? const CircularProgressIndicator()
+                    : const Text('📤 Envoyer vers MongoDB'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _descriptionController.dispose();
+    _addressController.dispose();
+    _categoryController.dispose();
+    super.dispose();
+  }
+}

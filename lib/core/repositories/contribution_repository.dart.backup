@@ -1,0 +1,39 @@
+import '../services/api_service.dart';
+import '../models/contribution.dart';
+
+class ContributionRepository {
+  final ApiService _apiService = ApiService();
+
+  Future<List<Contribution>> getAllContributions() async {
+    try {
+      // Utiliser l'API REST au lieu de MongoDB direct
+      return await _apiService.getContributions();
+    } catch (e) {
+      throw Exception('Erreur lors de la récupération des contributions: $e');
+    }
+  }
+
+  Future<void> addContribution(Contribution contribution) async {
+    try {
+      await _apiService.createContribution(contribution);
+    } catch (e) {
+      throw Exception('Erreur lors de l\'ajout de la contribution: $e');
+    }
+  }
+
+  Future<void> updateContribution(String id, Contribution contribution) async {
+    try {
+      await _apiService.updateContribution(id, contribution);
+    } catch (e) {
+      throw Exception('Erreur lors de la mise à jour: $e');
+    }
+  }
+
+  Future<void> deleteContribution(String id) async {
+    try {
+      await _apiService.deleteContribution(id);
+    } catch (e) {
+      throw Exception('Erreur lors de la suppression: $e');
+    }
+  }
+}
