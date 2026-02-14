@@ -11,6 +11,12 @@ class User {
   final bool isVerified;
   final String preferredLanguage;
 
+  // Données de récompense
+  final int? totalPoints;
+  final int? currentLevel;
+  final String? levelName;
+  final List<Map<String, dynamic>>? badges;
+
   User({
     required this.id,
     required this.name,
@@ -19,6 +25,10 @@ class User {
     this.profileImage,
     required this.createdAt,
     required this.updatedAt,
+    this.totalPoints,
+    this.currentLevel,
+    this.levelName,
+    this.badges,
     this.favoriteInfrastructures = const [],
     this.contributionsCount = 0,
     this.isVerified = false,
@@ -44,6 +54,12 @@ class User {
       contributionsCount: json['contributions_count'] ?? 0,
       isVerified: json['is_verified'] ?? false,
       preferredLanguage: json['preferred_language'] ?? 'fr',
+      totalPoints: json['total_points'] as int?,
+      currentLevel: json['current_level'] as int?,
+      levelName: json['level_name'] as String?,
+      badges: json['badges'] != null
+          ? List<Map<String, dynamic>>.from(json['badges'])
+          : null,
     );
   }
 
@@ -54,6 +70,10 @@ class User {
       'email': email,
       'phone': phone,
       'profile_image': profileImage,
+      'total_points': totalPoints,
+      'current_level': currentLevel,
+      'level_name': levelName,
+      'badges': badges,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
       'favorite_infrastructures': favoriteInfrastructures,
@@ -75,6 +95,10 @@ class User {
     int? contributionsCount,
     bool? isVerified,
     String? preferredLanguage,
+    int? totalPoints,
+    int? currentLevel,
+    String? levelName,
+    List<Map<String, dynamic>>? badges,
   }) {
     return User(
       id: id ?? this.id,
@@ -84,6 +108,10 @@ class User {
       profileImage: profileImage ?? this.profileImage,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      totalPoints: totalPoints ?? this.totalPoints,
+      currentLevel: currentLevel ?? this.currentLevel,
+      levelName: levelName ?? this.levelName,
+      badges: badges ?? this.badges,
       favoriteInfrastructures:
           favoriteInfrastructures ?? this.favoriteInfrastructures,
       contributionsCount: contributionsCount ?? this.contributionsCount,

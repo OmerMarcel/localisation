@@ -108,31 +108,72 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: _getScreen(_currentIndex),
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        currentIndex: _currentIndex,
-        onTap: (index) {
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) async {
+        if (didPop) return;
+
+        // Si on n'est pas sur l'onglet Accueil, y revenir
+        if (_currentIndex != 0) {
           setState(() {
-            _currentIndex = index;
-            // Désactiver le mode proximité si on change d'onglet manuellement
-            if (index != 1) {
-              _proximityMode = false;
-            }
+            _currentIndex = 0;
+            _proximityMode = false;
+            _searchCategory = null;
           });
-        },
-        selectedItemColor: AppColors.primary,
-        unselectedItemColor: AppColors.textSecondary,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Accueil'),
-          BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Carte'),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.add_location),
-            label: 'Contribuer',
+          return;
+        }
+
+        // Si on est sur l'Accueil, demander confirmation pour quitter
+        final shouldPop = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Quitter l\'application'),
+            content: const Text(
+              'Voulez-vous vraiment quitter l\'application ?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Non'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Oui'),
+              ),
+            ],
           ),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profil'),
-        ],
+        );
+
+        if (shouldPop == true && context.mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
+        body: _getScreen(_currentIndex),
+        bottomNavigationBar: BottomNavigationBar(
+          type: BottomNavigationBarType.fixed,
+          currentIndex: _currentIndex,
+          onTap: (index) {
+            setState(() {
+              _currentIndex = index;
+              // Désactiver le mode proximité si on change d'onglet manuellement
+              if (index != 1) {
+                _proximityMode = false;
+              }
+            });
+          },
+          selectedItemColor: AppColors.primary,
+          unselectedItemColor: AppColors.textSecondary,
+          items: const [
+            BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Accueil'),
+            BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Carte'),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.add_location),
+              label: 'Contribuer',
+            ),
+            BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profil'),
+          ],
+        ),
       ),
     );
   }

@@ -23,7 +23,8 @@ class AppConstants {
   );
   static const String supabaseAnonKey = String.fromEnvironment(
     'SUPABASE_ANON_KEY',
-    defaultValue: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InllamxpZ3ljdGFsdmhyemVzanJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0MTE5MjQsImV4cCI6MjA3ODk4NzkyNH0.1tRmISHmictTP1VW4XTBTY9ehDZsTRUcGIfObazUJ9o',
+    defaultValue:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InllamxpZ3ljdGFsdmhyemVzanJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0MTE5MjQsImV4cCI6MjA3ODk4NzkyNH0.1tRmISHmictTP1VW4XTBTY9ehDZsTRUcGIfObazUJ9o',
   );
 
   // Endpoints
@@ -36,6 +37,11 @@ class AppConstants {
   static const String uploadImageEndpoint = '/api/upload';
   static const String favoritesEndpoint = '/api/favorites';
   static const String healthEndpoint = '/health';
+  static const String rewardsEndpoint = '/api/rewards';
+  static const String myRewardsEndpoint = '/api/rewards/my-rewards';
+  static const String leaderboardEndpoint = '/api/rewards/leaderboard';
+  static const String badgesEndpoint = '/api/rewards/badges';
+  static const String levelsEndpoint = '/api/rewards/levels';
 
   // Map Configuration
   static const double defaultLatitude = 6.3654; // Cotonou latitude

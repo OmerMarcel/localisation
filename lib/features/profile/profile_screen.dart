@@ -18,6 +18,7 @@ import 'pages/location_settings_page.dart';
 import 'pages/offline_settings_page.dart';
 import 'pages/help_page.dart';
 import 'pages/personal_info_page.dart';
+import 'pages/rewards_page.dart';
 import '../auth/screens/forgot_password_screen.dart';
 
 // Provider pour gérer l'état de l'utilisateur avec Firebase
@@ -566,12 +567,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             if (Navigator.canPop(context)) {
               Navigator.pop(context);
             } else {
-              // Si on ne peut pas revenir en arrière, naviguer vers l'écran d'accueil
-              Navigator.of(context).popUntil((route) => route.isFirst);
+              // Retourner à l'écran d'accueil
+              Navigator.of(context).pushReplacementNamed('/');
             }
           },
         ),
-        automaticallyImplyLeading: false,
       ),
       body: userState.isLoggedIn
           ? _buildProfileContent(context, ref, userState)
@@ -771,6 +771,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ]),
 
           _buildMenuSection('Mon activité', [
+            _buildMenuItem(
+              Icons.emoji_events,
+              'Récompenses et badges',
+              'Voir mes points et badges',
+              () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const RewardsScreen(),
+                  ),
+                );
+              },
+            ),
             _buildMenuItem(
               Icons.favorite,
               'Mes favoris',
