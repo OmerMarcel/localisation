@@ -5,6 +5,9 @@ import '../models/level.dart';
 import '../models/badge.dart';
 import '../models/contribution_history.dart';
 import '../models/leaderboard_entry.dart';
+import '../models/exchange_config.dart';
+import '../models/reward_exchange.dart';
+import '../models/exchange_request_result.dart';
 import '../constants/app_constants.dart';
 import 'storage_service.dart';
 
@@ -98,7 +101,7 @@ class RewardService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return ContributionHistoryPage.fromJson(data['data']);
+        return _parseContributionHistoryResponse(data);
       } else if (response.statusCode == 401) {
         throw Exception('Non authentifié. Veuillez vous connecter.');
       } else {
@@ -129,7 +132,7 @@ class RewardService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return ContributionHistoryPage.fromJson(data['data']);
+        return _parseContributionHistoryResponse(data);
       } else if (response.statusCode == 401) {
         throw Exception('Non authentifié. Veuillez vous connecter.');
       } else if (response.statusCode == 403) {
@@ -224,6 +227,83 @@ class RewardService {
     }
   }
 
+  /// Récupère la configuration d'echange (taux, seuil)
+  Future<ExchangeConfig> getExchangeConfig() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl${AppConstants.exchangeConfigEndpoint}'),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return ExchangeConfig.fromJson(data['data']);
+      } else {
+        throw Exception(
+          'Erreur lors de la récupération de la configuration: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      throw Exception('Erreur de connexion: $e');
+    }
+  }
+
+  /// Echange automatique de points en CFA
+  Future<ExchangeRequestResult> requestExchange({required int points}) async {
+    if (_authToken == null) await loadAuthToken();
+
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl${AppConstants.exchangeEndpoint}'),
+        headers: _headers,
+        body: jsonEncode({'points': points}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return ExchangeRequestResult.fromJson(data['data']);
+      } else if (response.statusCode == 401) {
+        throw Exception('Non authentifié. Veuillez vous connecter.');
+      } else {
+        throw Exception(
+          'Erreur lors de l\'echange: ${response.statusCode} - ${response.body}',
+        );
+      }
+    } catch (e) {
+      throw Exception('Erreur de connexion: $e');
+    }
+  }
+
+  /// Récupère l'historique des échanges de l'utilisateur connecté
+  Future<PaginatedExchangeHistory> getMyExchanges({
+    int page = 1,
+    int limit = 20,
+  }) async {
+    if (_authToken == null) await loadAuthToken();
+
+    try {
+      final response = await http.get(
+        Uri.parse(
+          '$_baseUrl${AppConstants.myExchangesEndpoint}?page=$page&limit=$limit',
+        ),
+        headers: _headers,
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return PaginatedExchangeHistory.fromJson(data);
+      } else if (response.statusCode == 401) {
+        throw Exception('Non authentifié. Veuillez vous connecter.');
+      } else {
+        throw Exception(
+          'Erreur lors de la récupération des échanges: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      throw Exception('Erreur de connexion: $e');
+    }
+  }
+
   /// Méthode pour rafraîchir le token d'authentification
   void setAuthToken(String token) {
     _authToken = token;
@@ -232,5 +312,25 @@ class RewardService {
   /// Méthode pour nettoyer le token
   void clearAuthToken() {
     _authToken = null;
+  }
+
+  ContributionHistoryPage _parseContributionHistoryResponse(
+    Map<String, dynamic> response,
+  ) {
+    final data = response['data'];
+    final pagination = response['pagination'] as Map<String, dynamic>?;
+
+    if (data is List && pagination != null) {
+      return ContributionHistoryPage.fromJson({
+        'contributions': data,
+        'total_count': pagination['total'] ?? 0,
+        'current_page': pagination['page'] ?? 1,
+        'total_pages': pagination['pages'] ?? 1,
+      });
+    }
+
+    return ContributionHistoryPage.fromJson(
+      response['data'] as Map<String, dynamic>,
+    );
   }
 }

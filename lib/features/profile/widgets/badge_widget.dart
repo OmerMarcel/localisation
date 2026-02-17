@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/models/badge.dart' as model;
+import '../../../core/theme/app_theme.dart';
 
 /// Widget pour afficher un badge
 class BadgeWidget extends StatelessWidget {
@@ -30,7 +31,7 @@ class BadgeWidget extends StatelessWidget {
               shape: BoxShape.circle,
               color: isUnlocked
                   ? _getColorFromHex(badge.color ?? '#FFD700')
-                  : Colors.grey[300],
+                  : AppColors.textDisabled,
               boxShadow: isUnlocked
                   ? [
                       BoxShadow(
@@ -52,7 +53,8 @@ class BadgeWidget extends StatelessWidget {
                       badge.icon ?? '🏆',
                       style: TextStyle(
                         fontSize: size * 0.5,
-                        color: isUnlocked ? Colors.white : Colors.grey[400],
+                        color:
+                            isUnlocked ? AppColors.textLight : AppColors.textSecondary,
                       ),
                     ),
                   ),
@@ -64,13 +66,13 @@ class BadgeWidget extends StatelessWidget {
                       child: Container(
                         padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
-                          color: Colors.grey[700],
+                          color: AppColors.textSecondary,
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
                           Icons.lock,
                           size: size * 0.2,
-                          color: Colors.white,
+                          color: AppColors.textLight,
                         ),
                       ),
                     ),
@@ -89,7 +91,7 @@ class BadgeWidget extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: isUnlocked ? FontWeight.bold : FontWeight.normal,
-                color: isUnlocked ? Colors.black87 : Colors.grey[500],
+                color: isUnlocked ? AppColors.textPrimary : AppColors.textSecondary,
               ),
             ),
           ),
@@ -103,7 +105,7 @@ class BadgeWidget extends StatelessWidget {
       final hex = hexColor.replaceAll('#', '');
       return Color(int.parse('FF$hex', radix: 16));
     } catch (e) {
-      return Colors.amber; // Couleur par défaut
+      return AppColors.secondary; // Couleur par défaut
     }
   }
 }
@@ -181,7 +183,7 @@ class BadgeGridWidget extends StatelessWidget {
               children: [
                 Icon(
                   isUnlocked ? Icons.check_circle : Icons.lock_outline,
-                  color: isUnlocked ? Colors.green : Colors.grey,
+                  color: isUnlocked ? AppColors.success : AppColors.textSecondary,
                   size: 20,
                 ),
                 const SizedBox(width: 8),
@@ -190,7 +192,8 @@ class BadgeGridWidget extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: isUnlocked ? Colors.green : Colors.grey,
+                    color:
+                        isUnlocked ? AppColors.success : AppColors.textSecondary,
                   ),
                 ),
               ],
@@ -198,7 +201,7 @@ class BadgeGridWidget extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               'Condition: ${badge.requiredCount} ${badge.category}',
-              style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
             ),
           ],
         ),

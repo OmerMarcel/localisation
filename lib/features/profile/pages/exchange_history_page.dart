@@ -1,21 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../../core/models/reward_exchange.dart';
 import '../../../core/providers/reward_providers.dart';
-import '../../../core/models/contribution_history.dart';
 import '../../../core/theme/app_theme.dart';
 
-/// Page de l'historique complet des contributions
-class ContributionHistoryPage extends ConsumerStatefulWidget {
-  const ContributionHistoryPage({Key? key}) : super(key: key);
+class ExchangeHistoryPage extends ConsumerStatefulWidget {
+  const ExchangeHistoryPage({super.key});
 
   @override
-  ConsumerState<ContributionHistoryPage> createState() =>
-      _ContributionHistoryPageState();
+  ConsumerState<ExchangeHistoryPage> createState() =>
+      _ExchangeHistoryPageState();
 }
 
-class _ContributionHistoryPageState
-    extends ConsumerState<ContributionHistoryPage> {
+class _ExchangeHistoryPageState extends ConsumerState<ExchangeHistoryPage> {
   int _currentPage = 1;
   final ScrollController _scrollController = ScrollController();
 
@@ -34,13 +32,12 @@ class _ContributionHistoryPageState
   void _onScroll() {
     if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent * 0.9) {
-      // Charger la page suivante
       _loadNextPage();
     }
   }
 
   Future<void> _loadNextPage() async {
-    final historyAsync = ref.read(contributionHistoryProvider(_currentPage));
+    final historyAsync = ref.read(exchangeHistoryProvider(_currentPage));
     await historyAsync.when(
       data: (historyPage) {
         if (_currentPage < historyPage.totalPages) {
@@ -56,35 +53,17 @@ class _ContributionHistoryPageState
 
   @override
   Widget build(BuildContext context) {
-    final historyAsync = ref.watch(contributionHistoryProvider(_currentPage));
+    final historyAsync = ref.watch(exchangeHistoryProvider(_currentPage));
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Historique des contributions'),
+        title: const Text('Historique des echanges'),
         backgroundColor: AppColors.primary,
       ),
       body: historyAsync.when(
         data: (historyPage) {
-          if (historyPage.contributions.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.history, size: 80, color: AppColors.textDisabled),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Aucune contribution',
-                    style: TextStyle(fontSize: 18, color: AppColors.textSecondary),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Commencez à contribuer pour voir votre historique',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
-                  ),
-                ],
-              ),
-            );
+          if (historyPage.exchanges.isEmpty) {
+            return _buildEmptyState();
           }
 
           return RefreshIndicator(
@@ -92,11 +71,10 @@ class _ContributionHistoryPageState
               setState(() {
                 _currentPage = 1;
               });
-              ref.invalidate(contributionHistoryProvider(_currentPage));
+              ref.invalidate(exchangeHistoryProvider(_currentPage));
             },
             child: Column(
               children: [
-                // En-tête avec statistiques
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
@@ -111,7 +89,7 @@ class _ContributionHistoryPageState
                   child: Column(
                     children: [
                       Text(
-                        'Total de contributions',
+                        'Total des echanges',
                         style: TextStyle(
                           fontSize: 14,
                           color: AppColors.textSecondary,
@@ -137,16 +115,13 @@ class _ContributionHistoryPageState
                     ],
                   ),
                 ),
-
-                // Liste des contributions
                 Expanded(
                   child: ListView.builder(
                     controller: _scrollController,
                     padding: const EdgeInsets.all(16),
-                    itemCount: historyPage.contributions.length + 1,
+                    itemCount: historyPage.exchanges.length + 1,
                     itemBuilder: (context, index) {
-                      if (index == historyPage.contributions.length) {
-                        // Indicateur de chargement en bas
+                      if (index == historyPage.exchanges.length) {
                         if (_currentPage < historyPage.totalPages) {
                           return const Padding(
                             padding: EdgeInsets.all(16),
@@ -156,8 +131,7 @@ class _ContributionHistoryPageState
                         return const SizedBox();
                       }
 
-                      final contribution = historyPage.contributions[index];
-                      return _buildContributionTile(contribution);
+                      return _buildExchangeTile(historyPage.exchanges[index]);
                     },
                   ),
                 ),
@@ -192,10 +166,10 @@ class _ContributionHistoryPageState
                   setState(() {
                     _currentPage = 1;
                   });
-                  ref.invalidate(contributionHistoryProvider(_currentPage));
+                  ref.invalidate(exchangeHistoryProvider(_currentPage));
                 },
                 icon: const Icon(Icons.refresh),
-                label: const Text('Réessayer'),
+                label: const Text('Reessayer'),
               ),
             ],
           ),
@@ -204,26 +178,27 @@ class _ContributionHistoryPageState
     );
   }
 
-  Widget _buildContributionTile(ContributionHistory contribution) {
-    Color typeColor;
-    switch (contribution.contributionType) {
-      case 'avis':
-        typeColor = AppColors.secondary;
+  Widget _buildExchangeTile(RewardExchange exchange) {
+    final amountFormat = NumberFormat.currency(
+      locale: 'fr_FR',
+      symbol: 'F CFA',
+      decimalDigits: 2,
+    );
+    final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
+
+    Color statusColor;
+    switch (exchange.status) {
+      case 'completed':
+        statusColor = AppColors.success;
         break;
-      case 'proposition':
-        typeColor = AppColors.primary;
+      case 'cancelled':
+        statusColor = AppColors.warning;
         break;
-      case 'signalement':
-        typeColor = AppColors.warning;
-        break;
-      case 'proposition_approuvee':
-        typeColor = AppColors.success;
-        break;
-      case 'bonus_admin':
-        typeColor = AppColors.accent;
+      case 'failed':
+        statusColor = AppColors.error;
         break;
       default:
-        typeColor = AppColors.textSecondary;
+        statusColor = AppColors.textSecondary;
     }
 
     return Card(
@@ -231,91 +206,46 @@ class _ContributionHistoryPageState
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ListTile(
         contentPadding: const EdgeInsets.all(16),
-
-        // Icône
-        leading: Container(
-          width: 50,
-          height: 50,
-          decoration: BoxDecoration(
-            color: typeColor.withOpacity(0.1),
-            shape: BoxShape.circle,
-          ),
-          child: Center(
-            child: Text(
-              contribution.icon,
-              style: const TextStyle(fontSize: 24),
-            ),
-          ),
+        leading: CircleAvatar(
+          backgroundColor: statusColor.withOpacity(0.12),
+          child: Icon(Icons.currency_exchange, color: statusColor),
         ),
-
-        // Type et date
         title: Text(
-          contribution.typeLabel,
+          '${exchange.pointsExchanged} pts = ${amountFormat.format(exchange.amountCfa)}',
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 4),
-            Text(
-              DateFormat(
-                'dd MMMM yyyy à HH:mm',
-                'fr',
-              ).format(contribution.createdAt),
-              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-            ),
-            if (contribution.details != null) ...[
-              const SizedBox(height: 4),
-              Text(
-                _getDetailsText(contribution.details!),
-                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ],
-        ),
-
-        // Points gagnés
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: AppColors.success.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppColors.success.withOpacity(0.3)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '+${contribution.pointsEarned}',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.success,
-                ),
-              ),
-              Text(
-                'pts',
-                style: TextStyle(fontSize: 10, color: AppColors.success),
-              ),
-            ],
-          ),
+        subtitle: Text(dateFormat.format(exchange.createdAt)),
+        trailing: Text(
+          exchange.statusLabel,
+          style: TextStyle(color: statusColor, fontWeight: FontWeight.w600),
         ),
       ),
     );
   }
 
-  String _getDetailsText(Map<String, dynamic> details) {
-    if (details.containsKey('comment')) {
-      return details['comment'] as String;
-    }
-    if (details.containsKey('description')) {
-      return details['description'] as String;
-    }
-    if (details.containsKey('title')) {
-      return details['title'] as String;
-    }
-    return 'Détails de la contribution';
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.currency_exchange,
+            size: 80,
+            color: AppColors.textDisabled,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Aucun echange',
+            style: TextStyle(fontSize: 18, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Effectuez un echange pour voir votre historique',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+          ),
+        ],
+      ),
+    );
   }
 }

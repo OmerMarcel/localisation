@@ -210,7 +210,7 @@ class DashboardScreen extends ConsumerWidget {
             ),
             Expanded(
               child: Text(
-                'CotoNav',
+                'KutonouTché',
                 style: TextStyle(fontSize: 20),
                 textAlign: TextAlign.center,
               ),

@@ -22,30 +22,44 @@ class Avis {
   });
 
   factory Avis.fromJson(Map<String, dynamic> json) {
+    print('🔍 [Avis.fromJson] Parsing JSON: ${json.keys.join(", ")}');
+
     final rawUtilisateur = json['utilisateur'] ?? json['utilisateur_id'];
     AvisUtilisateur? utilisateur;
     if (rawUtilisateur is Map<String, dynamic>) {
       utilisateur = AvisUtilisateur.fromJson(rawUtilisateur);
     }
 
-    return Avis(
+    // Parser les photos avec typage explicite
+    final photosList = (json['photos'] as List<dynamic>?) ?? [];
+    final photos = photosList
+        .map<String>((p) {
+          if (p is String) return p;
+          if (p is Map<String, dynamic>) return (p['url'] ?? '') as String;
+          return '';
+        })
+        .where((url) => url.isNotEmpty)
+        .toList();
+
+    final avis = Avis(
       id: json['id'] ?? '',
       infrastructureId:
           json['infrastructure_id'] ?? json['infrastructureId'] ?? '',
       userId: json['utilisateur_id'] ?? json['userId'] ?? '',
       note: (json['note'] ?? 0).toInt(),
       commentaire: json['commentaire'] ?? '',
-      photos: (json['photos'] ?? [])
-          .map((p) => p is String ? p : (p['url'] ?? ''))
-          .where((url) => url.isNotEmpty)
-          .cast<String>()
-          .toList(),
+      photos: photos,
       approuve: json['approuve'] ?? true,
       createdAt:
           DateTime.tryParse(json['created_at'] ?? json['createdAt'] ?? '') ??
           DateTime.now(),
       utilisateur: utilisateur,
     );
+
+    print(
+      '✅ [Avis.fromJson] Avis créé: ${avis.id} - Note: ${avis.note} - Commentaire: ${avis.commentaire.isEmpty ? "(vide)" : avis.commentaire.substring(0, avis.commentaire.length > 20 ? 20 : avis.commentaire.length)}...',
+    );
+    return avis;
   }
 
   Map<String, dynamic> toJson() {

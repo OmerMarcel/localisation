@@ -1,4 +1,4 @@
-name: CotoNav
+name: kutonoutche
 description: "Application de géolocalisation des infrastructures et services publics à Cotonou"
 publish_to: "none"
 
@@ -46,7 +46,7 @@ dependencies:
   firebase_messaging: ^16.0.4
   firebase_app_check: 0.4.1+2
   cloud_firestore: ^6.1.0
-  
+
   # Google Sign In
   google_sign_in: ^6.2.1
 

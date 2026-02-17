@@ -19,7 +19,15 @@ class MockDataService {
       final String jsonString = await rootBundle.loadString(
         'assets/data/sample_infrastructures.json',
       );
-      final List<dynamic> jsonList = json.decode(jsonString);
+      if (jsonString.trim().isEmpty) {
+        print(
+          'Erreur lors du chargement des donnees d\'exemple: fichier JSON vide',
+        );
+        return [];
+      }
+      final dynamic decoded = json.decode(jsonString);
+      final List<dynamic> jsonList =
+          decoded is List ? decoded : (decoded['data'] as List? ?? []);
 
       _cachedInfrastructures = jsonList
           .map((json) => Infrastructure.fromJson(json))

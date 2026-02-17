@@ -21,16 +21,37 @@ class LeaderboardEntry {
   });
 
   factory LeaderboardEntry.fromJson(Map<String, dynamic> json) {
+    final rawUserId = json['user_id'] ?? json['id'];
+    final rawUserName = json['user_name'] ?? _buildName(json);
+    final rawBadgesCount = json['badges_count'] ?? json['badge_count'];
+
     return LeaderboardEntry(
-      rank: json['rank'] as int,
-      userId: json['user_id'] as String,
-      userName: json['user_name'] as String,
-      userProfileImage: json['user_profile_image'] as String?,
-      totalPoints: json['total_points'] as int,
-      currentLevel: json['current_level'] as int,
-      levelName: json['level_name'] as String,
-      badgesCount: json['badges_count'] as int,
+      rank: _parseInt(json['rank']),
+      userId: rawUserId?.toString() ?? 'unknown',
+      userName: rawUserName.toString(),
+      userProfileImage:
+          (json['user_profile_image'] ?? json['avatar']) as String?,
+      totalPoints: _parseInt(json['total_points']),
+      currentLevel: _parseInt(json['current_level']),
+      levelName: (json['level_name'] ?? 'Niveau').toString(),
+      badgesCount: _parseInt(rawBadgesCount),
     );
+  }
+
+  static String _buildName(Map<String, dynamic> json) {
+    final prenom = json['prenom']?.toString().trim();
+    final nom = json['nom']?.toString().trim();
+    final fullName = [prenom, nom]
+        .where((value) => value?.isNotEmpty == true)
+        .whereType<String>();
+    return fullName.isEmpty ? 'Utilisateur' : fullName.join(' ');
+  }
+
+  static int _parseInt(dynamic value) {
+    if (value == null) return 0;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value.toString()) ?? 0;
   }
 
   Map<String, dynamic> toJson() {

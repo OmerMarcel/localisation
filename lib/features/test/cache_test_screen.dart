@@ -1,6 +1,6 @@
 import 'dart:math';
-import 'package:CotoNav/core/models/infrastructure.dart';
-import 'package:CotoNav/core/services/infrastructure_cache_service.dart';
+import 'package:kutonoutche/core/models/infrastructure.dart';
+import 'package:kutonoutche/core/services/infrastructure_cache_service.dart';
 import 'package:flutter/material.dart';
 
 /// Widget de test pour vérifier le système de cache local

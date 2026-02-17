@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/models/level.dart';
+import '../../../core/theme/app_theme.dart';
 
 /// Widget pour afficher le niveau actuel et la progression vers le suivant
 class LevelProgressWidget extends StatelessWidget {
@@ -29,9 +30,9 @@ class LevelProgressWidget extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           gradient: LinearGradient(
             colors: [
-              _getColorFromHex(currentLevel.color ?? '#6366f1'),
+              _getColorFromHex(currentLevel.color ?? '#96D0EE'),
               _getColorFromHex(
-                currentLevel.color ?? '#6366f1',
+                currentLevel.color ?? '#96D0EE',
               ).withOpacity(0.7),
             ],
             begin: Alignment.topLeft,
@@ -65,7 +66,7 @@ class LevelProgressWidget extends StatelessWidget {
                         style: const TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: AppColors.primary,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -73,7 +74,7 @@ class LevelProgressWidget extends StatelessWidget {
                         '$totalPoints points',
                         style: TextStyle(
                           fontSize: 16,
-                          color: Colors.white.withOpacity(0.9),
+                          color: AppColors.primary.withOpacity(0.9),
                         ),
                       ),
                     ],
@@ -88,7 +89,7 @@ class LevelProgressWidget extends StatelessWidget {
                 currentLevel.description!,
                 style: TextStyle(
                   fontSize: 14,
-                  color: Colors.white.withOpacity(0.9),
+                  color: AppColors.primary.withOpacity(0.9),
                 ),
               ),
             ],
@@ -96,7 +97,7 @@ class LevelProgressWidget extends StatelessWidget {
             // Progression vers le niveau suivant
             if (nextLevel != null) ...[
               const SizedBox(height: 20),
-              const Divider(color: Colors.white54),
+              const Divider(color: AppColors.primary),
               const SizedBox(height: 12),
 
               Row(
@@ -106,7 +107,7 @@ class LevelProgressWidget extends StatelessWidget {
                     'Prochain niveau',
                     style: TextStyle(
                       fontSize: 14,
-                      color: Colors.white.withOpacity(0.9),
+                      color: AppColors.primary.withOpacity(0.9),
                     ),
                   ),
                   Text(
@@ -114,7 +115,7 @@ class LevelProgressWidget extends StatelessWidget {
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: Colors.white,
+                      color: AppColors.primary,
                     ),
                   ),
                 ],
@@ -131,9 +132,9 @@ class LevelProgressWidget extends StatelessWidget {
                     child: LinearProgressIndicator(
                       value: progressPercentage / 100,
                       minHeight: 12,
-                      backgroundColor: Colors.white.withOpacity(0.3),
+                      backgroundColor: AppColors.primary.withOpacity(0.3),
                       valueColor: const AlwaysStoppedAnimation<Color>(
-                        Colors.white,
+                        AppColors.primary,
                       ),
                     ),
                   ),
@@ -142,7 +143,7 @@ class LevelProgressWidget extends StatelessWidget {
                     'Plus que $pointsToNextLevel points !',
                     style: TextStyle(
                       fontSize: 13,
-                      color: Colors.white.withOpacity(0.9),
+                      color: AppColors.primary.withOpacity(0.9),
                     ),
                   ),
                 ],
@@ -161,7 +162,7 @@ class LevelProgressWidget extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: Colors.white.withOpacity(0.95),
+                        color: Colors.black.withOpacity(0.95),
                       ),
                     ),
                   ],
@@ -179,7 +180,7 @@ class LevelProgressWidget extends StatelessWidget {
       final hex = hexColor.replaceAll('#', '');
       return Color(int.parse('FF$hex', radix: 16));
     } catch (e) {
-      return Colors.indigo; // Couleur par défaut
+      return AppColors.primary; // Couleur par défaut
     }
   }
 }
@@ -206,15 +207,15 @@ class LevelBadgeWidget extends StatelessWidget {
         shape: BoxShape.circle,
         gradient: LinearGradient(
           colors: [
-            _getColorFromHex(level.color ?? '#6366f1'),
-            _getColorFromHex(level.color ?? '#6366f1').withOpacity(0.7),
+            _getColorFromHex(level.color ?? '#96D0EE'),
+            _getColorFromHex(level.color ?? '#96D0EE').withOpacity(0.7),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         boxShadow: [
           BoxShadow(
-            color: _getColorFromHex(level.color ?? '#6366f1').withOpacity(0.4),
+            color: _getColorFromHex(level.color ?? '#96D0EE').withOpacity(0.4),
             blurRadius: 8,
             spreadRadius: 2,
           ),
@@ -244,7 +245,7 @@ class LevelBadgeWidget extends StatelessWidget {
       final hex = hexColor.replaceAll('#', '');
       return Color(int.parse('FF$hex', radix: 16));
     } catch (e) {
-      return Colors.indigo;
+      return AppColors.primary;
     }
   }
 }

@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../core/providers/reward_providers.dart';
 import '../../../core/models/level.dart';
+import '../../../core/theme/app_theme.dart';
 import '../widgets/level_progress_widget.dart';
 import '../widgets/badge_widget.dart';
 import 'leaderboard_page.dart';
 import 'contribution_history_page.dart';
+import 'exchange_points_page.dart';
 
 /// Écran principal des récompenses
 class RewardsScreen extends ConsumerStatefulWidget {
@@ -23,7 +25,7 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
   }
 
   @override
@@ -41,15 +43,18 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text('Mes Récompenses'),
-        backgroundColor: Colors.indigo,
+        backgroundColor: AppColors.primary,
         elevation: 0,
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: Colors.white,
+          indicatorColor: AppColors.textLight,
+          labelColor: AppColors.textLight,
+          unselectedLabelColor: AppColors.textLight.withOpacity(0.7),
           tabs: const [
             Tab(icon: Icon(Icons.star), text: 'Vue d\'ensemble'),
             Tab(icon: Icon(Icons.emoji_events), text: 'Badges'),
             Tab(icon: Icon(Icons.leaderboard), text: 'Classement'),
+            Tab(icon: Icon(Icons.currency_exchange), text: 'Echange'),
           ],
         ),
       ),
@@ -64,6 +69,9 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen>
 
           // Onglet 3: Classement
           const LeaderboardPage(),
+
+          // Onglet 4: Echange de points
+          const ExchangePointsPage(),
         ],
       ),
     );
@@ -121,7 +129,7 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen>
                         icon: Icons.emoji_events,
                         label: 'Badges',
                         value: '${userRewards.badges.length}',
-                        color: Colors.amber,
+                        color: AppColors.secondary,
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -130,11 +138,15 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen>
                         icon: Icons.whatshot,
                         label: 'Points',
                         value: '${userRewards.totalPoints}',
-                        color: Colors.orange,
+                        color: AppColors.warning,
                       ),
                     ),
                   ],
                 ),
+
+                const SizedBox(height: 16),
+
+                _buildExchangeCtaCard(),
 
                 const SizedBox(height: 24),
 
@@ -167,14 +179,14 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen>
                           Icon(
                             Icons.emoji_events_outlined,
                             size: 64,
-                            color: Colors.grey[400],
+                            color: AppColors.textDisabled,
                           ),
                           const SizedBox(height: 16),
                           Text(
                             'Aucun badge débloqué pour le moment',
                             style: TextStyle(
                               fontSize: 16,
-                              color: Colors.grey[600],
+                              color: AppColors.textSecondary,
                             ),
                           ),
                           const SizedBox(height: 8),
@@ -183,7 +195,7 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen>
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 14,
-                              color: Colors.grey[500],
+                              color: AppColors.textSecondary,
                             ),
                           ),
                         ],
@@ -251,17 +263,21 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
+            Icon(
+              Icons.error_outline,
+              size: 64,
+              color: AppColors.error.withOpacity(0.7),
+            ),
             const SizedBox(height: 16),
             Text(
               'Erreur de chargement',
-              style: TextStyle(fontSize: 18, color: Colors.grey[700]),
+              style: TextStyle(fontSize: 18, color: AppColors.textSecondary),
             ),
             const SizedBox(height: 8),
             Text(
               error.toString(),
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+              style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
             ),
             const SizedBox(height: 16),
             ElevatedButton.icon(
@@ -297,7 +313,7 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen>
                   children: [
                     // Résumé
                     Card(
-                      color: Colors.indigo[50],
+                      color: AppColors.primary.withOpacity(0.08),
                       child: Padding(
                         padding: const EdgeInsets.all(16),
                         child: Row(
@@ -307,10 +323,10 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen>
                               children: [
                                 Text(
                                   '${userRewards.badges.length}',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 32,
                                     fontWeight: FontWeight.bold,
-                                    color: Colors.indigo,
+                                    color: AppColors.primary,
                                   ),
                                 ),
                                 const Text('Débloqués'),
@@ -319,7 +335,7 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen>
                             Container(
                               height: 40,
                               width: 1,
-                              color: Colors.indigo[200],
+                              color: AppColors.primary.withOpacity(0.3),
                             ),
                             Column(
                               children: [
@@ -328,7 +344,7 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen>
                                   style: TextStyle(
                                     fontSize: 32,
                                     fontWeight: FontWeight.bold,
-                                    color: Colors.grey[600],
+                                    color: AppColors.textSecondary,
                                   ),
                                 ),
                                 const Text('Restants'),
@@ -390,7 +406,55 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen>
             ),
             Text(
               label,
-              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+              style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExchangeCtaCard() {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.currency_exchange,
+                color: AppColors.primary,
+                size: 28,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Echanger mes points',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Transformez vos points en argent',
+                    style: TextStyle(color: AppColors.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: () => _tabController.animateTo(3),
+              child: const Text('Ouvrir'),
             ),
           ],
         ),
@@ -410,7 +474,7 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen>
               padding: const EdgeInsets.all(32),
               child: Text(
                 'Aucune contribution pour le moment',
-                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                style: TextStyle(fontSize: 16, color: AppColors.textSecondary),
               ),
             ),
           );
@@ -424,7 +488,7 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen>
             final contribution = historyPage.contributions[index];
             return ListTile(
               leading: CircleAvatar(
-                backgroundColor: Colors.indigo[100],
+                backgroundColor: AppColors.primary.withOpacity(0.15),
                 child: Text(contribution.icon),
               ),
               title: Text(contribution.typeLabel),
@@ -436,7 +500,7 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen>
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: Colors.green,
+                  color: AppColors.success,
                 ),
               ),
             );
@@ -452,7 +516,7 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen>
       error: (error, stack) => Center(
         child: Text(
           'Erreur de chargement de l\'historique',
-          style: TextStyle(color: Colors.grey[600]),
+          style: TextStyle(color: AppColors.textSecondary),
         ),
       ),
     );

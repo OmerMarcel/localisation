@@ -85,15 +85,28 @@ class ApiService {
         '$_baseUrl${AppConstants.infrastructuresEndpoint}',
       ).replace(queryParameters: queryParams.isEmpty ? null : queryParams);
 
+      print('🌐 [API] Requête GET: $uri');
+      print('🔑 [API] Headers: $_headers');
+
       final response = await http.get(uri, headers: _headers);
+
+      print('📡 [API] Statut: ${response.statusCode}');
+      print(
+        '📦 [API] Body (200 premiers chars): ${response.body.substring(0, response.body.length > 200 ? 200 : response.body.length)}',
+      );
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final list = (data is List ? data : data['data']) as List;
+        print('✅ [API] ${list.length} infrastructures reçues');
         return list.map((e) => Infrastructure.fromJson(e)).toList();
       } else {
+        print('❌ [API] Erreur: ${response.statusCode} - ${response.body}');
         throw Exception('Erreur (${response.statusCode}): ${response.body}');
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('💥 [API] Exception: $e');
+      print('📍 [API] StackTrace: $stackTrace');
       throw Exception('Erreur de connexion: $e');
     }
   }
@@ -788,20 +801,33 @@ class ApiService {
   /// Récupère les avis d'une infrastructure
   Future<List<Avis>> getAvis(String infrastructureId) async {
     try {
+      print(
+        '🔍 [AVIS] Récupération des avis pour infrastructure: $infrastructureId',
+      );
       final uri = Uri.parse(
         '$_baseUrl/api/avis?infrastructure_id=$infrastructureId',
       );
+      print('📍 [AVIS] URL: $uri');
       final response = await http.get(uri, headers: _headers);
+      print('📡 [AVIS] Statut: ${response.statusCode}');
+      print(
+        '📦 [AVIS] Body: ${response.body.substring(0, response.body.length > 200 ? 200 : response.body.length)}',
+      );
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final list =
             (data is List ? data : (data['data'] ?? data['avis'] ?? []))
                 as List;
+        print('✅ [AVIS] ${list.length} avis trouvés');
         return list.map((e) => Avis.fromJson(e)).toList();
       } else {
+        print('❌ [AVIS] Erreur: ${response.statusCode}');
         throw Exception('Erreur (${response.statusCode}): ${response.body}');
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('💥 [AVIS] Exception: $e');
+      print('📍 [AVIS] StackTrace: $stackTrace');
       throw Exception('Erreur lors du chargement des avis: $e');
     }
   }
@@ -814,14 +840,28 @@ class ApiService {
     List<String>? photos,
   }) async {
     try {
+      print(
+        '📝 [AVIS] Création d\'avis pour infrastructure: $infrastructureId',
+      );
+      final commentDisplay = (commentaire != null && commentaire.isNotEmpty)
+          ? commentaire.substring(
+              0,
+              commentaire.length > 30 ? 30 : commentaire.length,
+            )
+          : 'vide';
+      print('⭐ [AVIS] Note: $note, Commentaire: $commentDisplay');
+
       if (_authToken == null) {
+        print('🔐 [AVIS] Token null, chargement...');
         await loadAuthToken();
       }
       if (_authToken == null) {
+        print('❌ [AVIS] Token toujours null après chargement');
         throw Exception(
           'Token d\'authentification manquant. Veuillez vous connecter.',
         );
       }
+      print('✅ [AVIS] Token présent: ${_authToken?.substring(0, 20)}...');
 
       final uri = Uri.parse('$_baseUrl/api/avis');
       final body = {
@@ -831,6 +871,7 @@ class ApiService {
           'commentaire': commentaire,
         if (photos != null && photos.isNotEmpty) 'photos': photos,
       };
+      print('📤 [AVIS] Corps de la requête: $body');
 
       final response = await http.post(
         uri,
@@ -838,13 +879,20 @@ class ApiService {
         body: jsonEncode(body),
       );
 
+      print('📡 [AVIS] Statut réponse: ${response.statusCode}');
+      print('📦 [AVIS] Body réponse: ${response.body}');
+
       if (response.statusCode == 201 || response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        print('✅ [AVIS] Avis créé avec succès');
         return Avis.fromJson(data['data'] ?? data);
       } else {
+        print('❌ [AVIS] Erreur: ${response.statusCode} - ${response.body}');
         throw Exception('Erreur (${response.statusCode}): ${response.body}');
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('💥 [AVIS] Exception lors de la création: $e');
+      print('📍 [AVIS] StackTrace: $stackTrace');
       throw Exception('Erreur lors de la création de l\'avis: $e');
     }
   }

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:CotoNav/features/contribute/contribute_screen.dart';
+import 'package:kutonoutche/features/contribute/contribute_screen.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/models/contribution.dart';

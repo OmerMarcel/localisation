@@ -11,9 +11,9 @@ class AppConstants {
   // ⚠️ IMPORTANT : Changez cette IP selon votre environnement
   // - Émulateur Android : 'http://10.0.2.2:5000'
   // - Appareil physique (même WiFi) : 'http://VOTRE_IP_LOCALE:5000'
-  // Votre IP actuelle détectée : 192.168.1.6
-  static const String baseUrl =
-      'https://backend-cotonav.onrender.com'; // Backend localisation_dash (Wi‑Fi local)
+    // Votre IP actuelle détectée : 172.29.70.189
+    static const String baseUrl =
+      'http://172.29.70.189:5000'; // Backend local (appareil physique sur le meme WiFi)
 
   /// Supabase Auth (OTP, mot de passe oublié). Même projet que le backend.
   /// Override via --dart-define=SUPABASE_URL=... et SUPABASE_ANON_KEY=... si besoin.
@@ -42,6 +42,9 @@ class AppConstants {
   static const String leaderboardEndpoint = '/api/rewards/leaderboard';
   static const String badgesEndpoint = '/api/rewards/badges';
   static const String levelsEndpoint = '/api/rewards/levels';
+  static const String exchangeConfigEndpoint = '/api/rewards/exchange-config';
+  static const String exchangeEndpoint = '/api/rewards/exchange';
+  static const String myExchangesEndpoint = '/api/rewards/exchanges/my';
 
   // Map Configuration
   static const double defaultLatitude = 6.3654; // Cotonou latitude

@@ -18,17 +18,31 @@ class UserRewards {
   });
 
   factory UserRewards.fromJson(Map<String, dynamic> json) {
+    final currentLevelJson =
+        (json['current_level'] as Map<String, dynamic>?) ?? {};
+    final pointsToNextLevel =
+        json['points_to_next_level'] ?? currentLevelJson['points_to_next_level'];
+    final progressPercentage =
+        json['progress_percentage'] ?? currentLevelJson['progress_percentage'];
+
     return UserRewards(
       totalPoints: json['total_points'] as int,
-      currentLevel: Level.fromJson(
-        json['current_level'] as Map<String, dynamic>,
-      ),
-      pointsToNextLevel: json['points_to_next_level'] as int,
-      progressPercentage: (json['progress_percentage'] as num).toDouble(),
-      badges: (json['badges'] as List<dynamic>)
+      currentLevel: Level.fromJson(currentLevelJson),
+      pointsToNextLevel: pointsToNextLevel is int
+          ? pointsToNextLevel
+          : int.tryParse(pointsToNextLevel.toString()) ?? 0,
+      progressPercentage: _parseDouble(progressPercentage),
+        badges: ((json['badges'] as List<dynamic>?) ?? [])
           .map((badge) => Badge.fromJson(badge as Map<String, dynamic>))
           .toList(),
     );
+  }
+
+  static double _parseDouble(dynamic value) {
+    if (value == null) return 0;
+    if (value is double) return value;
+    if (value is num) return value.toDouble();
+    return double.tryParse(value.toString()) ?? 0;
   }
 
   Map<String, dynamic> toJson() {

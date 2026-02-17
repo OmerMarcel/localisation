@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'dart:convert';
 
+import '../../core/models/avis.dart';
 import '../../core/models/infrastructure.dart';
 import '../../core/providers/app_providers.dart';
 import '../../core/services/google_maps_service.dart';
@@ -195,6 +196,15 @@ class _InfrastructureDetailPopupState
   @override
   Widget build(BuildContext context) {
     String? distance;
+    final avisAsync = ref.watch(avisProvider(widget.infrastructure.id));
+    final avisList = avisAsync.maybeWhen(
+      data: (items) => items,
+      orElse: () => null,
+    );
+    final avisCount = avisList?.length ?? widget.infrastructure.reviewCount;
+    final averageRating = avisList != null && avisList.isNotEmpty
+        ? _calculateAverageRating(avisList)
+        : widget.infrastructure.rating;
     if (widget.currentPosition != null) {
       final distanceInMeters = ref
           .read(locationServiceProvider)
@@ -228,11 +238,11 @@ class _InfrastructureDetailPopupState
               _buildHeader(),
               _buildImageCarousel(),
               _buildMainInfo(distance),
-              _buildRatingSection(),
+              _buildRatingSection(averageRating, avisCount),
               _buildOpeningHours(),
               _buildDescription(),
               _buildContactInfo(),
-              _buildCommentsSection(),
+              _buildCommentsSection(avisAsync, avisCount),
               _buildActionButtons(),
               SizedBox(height: AppDimensions.spacingL),
             ],
@@ -570,7 +580,7 @@ class _InfrastructureDetailPopupState
     );
   }
 
-  Widget _buildRatingSection() {
+  Widget _buildRatingSection(double rating, int reviewCount) {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: AppDimensions.spacingL),
       child: Container(
@@ -589,11 +599,11 @@ class _InfrastructureDetailPopupState
                 vertical: AppDimensions.spacingS,
               ),
               decoration: BoxDecoration(
-                color: _getRatingColor(widget.infrastructure.rating),
+                color: _getRatingColor(rating),
                 borderRadius: BorderRadius.circular(AppDimensions.radiusS),
               ),
               child: Text(
-                widget.infrastructure.rating.toStringAsFixed(1),
+                rating.toStringAsFixed(1),
                 style: AppTextStyles.h3.copyWith(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
@@ -607,9 +617,9 @@ class _InfrastructureDetailPopupState
             Row(
               children: List.generate(5, (index) {
                 return Icon(
-                  index < widget.infrastructure.rating.floor()
+                  index < rating.floor()
                       ? Icons.star
-                      : index < widget.infrastructure.rating
+                      : index < rating
                       ? Icons.star_half
                       : Icons.star_border,
                   color: Colors.amber,
@@ -622,7 +632,7 @@ class _InfrastructureDetailPopupState
 
             // Nombre d'avis
             Text(
-              '(${widget.infrastructure.reviewCount} avis)',
+              '($reviewCount avis)',
               style: AppTextStyles.bodyMedium.copyWith(
                 color: AppColors.textSecondary,
               ),
@@ -834,7 +844,10 @@ class _InfrastructureDetailPopupState
     );
   }
 
-  Widget _buildCommentsSection() {
+  Widget _buildCommentsSection(
+    AsyncValue<List<Avis>> avisAsync,
+    int avisCount,
+  ) {
     return Padding(
       padding: EdgeInsets.all(AppDimensions.spacingL),
       child: Column(
@@ -844,7 +857,7 @@ class _InfrastructureDetailPopupState
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Commentaires (${widget.infrastructure.reviewCount})',
+                'Commentaires ($avisCount)',
                 style: AppTextStyles.h3.copyWith(fontWeight: FontWeight.bold),
               ),
               TextButton.icon(
@@ -859,170 +872,496 @@ class _InfrastructureDetailPopupState
           ),
           SizedBox(height: AppDimensions.spacingM),
 
-          // Pour l'instant, affichage de commentaires simulés
-          _buildSampleComments(),
+          avisAsync.when(
+            data: (avis) =>
+                avis.isEmpty ? _buildEmptyComments() : _buildAvisList(avis),
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (error, _) => _buildCommentsError(error),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildSampleComments() {
-    // Commentaires simulés pour la démonstration
-    final sampleComments = [
-      {
-        'author': 'Marie D.',
-        'rating': 5.0,
-        'comment': 'Excellent service, très bien situé !',
-        'date': '2 jours',
-      },
-      {
-        'author': 'Jean-Claude K.',
-        'rating': 4.0,
-        'comment': 'Bon accueil, mais l\'attente peut être longue.',
-        'date': '1 semaine',
-      },
-    ];
+  Widget _buildAvisList(List<Avis> avis) {
+    return Column(children: avis.map(_buildAvisTile).toList());
+  }
 
-    return Column(
-      children: sampleComments.map((comment) {
-        return Container(
-          margin: EdgeInsets.only(bottom: AppDimensions.spacingM),
-          padding: EdgeInsets.all(AppDimensions.spacingM),
-          decoration: BoxDecoration(
-            color: Colors.grey[50],
-            borderRadius: BorderRadius.circular(AppDimensions.radiusM),
-            border: Border.all(color: Colors.grey[200]!),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildAvisTile(Avis avis) {
+    final displayName = avis.utilisateur?.displayName ?? 'Utilisateur';
+    final initials = avis.utilisateur?.initials ?? '?';
+    final rating = avis.note.clamp(1, 5);
+    final comment = avis.commentaire.trim().isEmpty
+        ? 'Aucun commentaire.'
+        : avis.commentaire.trim();
+
+    return Container(
+      margin: EdgeInsets.only(bottom: AppDimensions.spacingM),
+      padding: EdgeInsets.all(AppDimensions.spacingM),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+        border: Border.all(color: Colors.grey[200]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 20,
-                    backgroundColor: AppColors.primary,
-                    child: Text(
-                      comment['author'].toString().substring(0, 1),
-                      style: const TextStyle(
-                        color: Colors.white,
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: AppColors.primary,
+                child: Text(
+                  initials,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              SizedBox(width: AppDimensions.spacingM),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      displayName,
+                      style: AppTextStyles.bodyMedium.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                  ),
-                  SizedBox(width: AppDimensions.spacingM),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    Row(
                       children: [
-                        Text(
-                          comment['author'].toString(),
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
                         Row(
-                          children: [
-                            Row(
-                              children: List.generate(5, (index) {
-                                final rating = comment['rating'] as double;
-                                return Icon(
-                                  index < rating.floor()
-                                      ? Icons.star
-                                      : Icons.star_border,
-                                  color: Colors.amber,
-                                  size: 16,
-                                );
-                              }),
-                            ),
-                            SizedBox(width: AppDimensions.spacingS),
-                            Text(
-                              'Il y a ${comment['date']}',
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          ],
+                          children: List.generate(5, (index) {
+                            return Icon(
+                              index < rating ? Icons.star : Icons.star_border,
+                              color: Colors.amber,
+                              size: 16,
+                            );
+                          }),
+                        ),
+                        SizedBox(width: AppDimensions.spacingS),
+                        Text(
+                          _formatRelativeTime(avis.createdAt),
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
                         ),
                       ],
                     ),
-                  ),
-                ],
-              ),
-              SizedBox(height: AppDimensions.spacingS),
-              Text(
-                comment['comment'].toString(),
-                style: AppTextStyles.bodyMedium.copyWith(height: 1.4),
+                  ],
+                ),
               ),
             ],
           ),
-        );
-      }).toList(),
+          SizedBox(height: AppDimensions.spacingS),
+          Text(comment, style: AppTextStyles.bodyMedium.copyWith(height: 1.4)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyComments() {
+    return Container(
+      padding: EdgeInsets.all(AppDimensions.spacingM),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+        border: Border.all(color: Colors.grey[200]!),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.comment_outlined, color: AppColors.textSecondary),
+          SizedBox(width: AppDimensions.spacingS),
+          Expanded(
+            child: Text(
+              'Aucun commentaire pour le moment. Soyez le premier a donner votre avis.',
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCommentsError(Object error) {
+    print('💥 [UI] Erreur affichée pour les avis: $error');
+
+    return Container(
+      padding: EdgeInsets.all(AppDimensions.spacingM),
+      decoration: BoxDecoration(
+        color: Colors.red.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+        border: Border.all(color: Colors.red.withOpacity(0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.error_outline, color: Colors.red),
+              SizedBox(width: AppDimensions.spacingS),
+              Expanded(
+                child: Text(
+                  'Impossible de charger les avis',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: Colors.red,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: AppDimensions.spacingS),
+          Text(
+            'Vérifiez votre connexion internet et que le serveur est bien démarré.',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+          SizedBox(height: AppDimensions.spacingM),
+          Center(
+            child: ElevatedButton.icon(
+              onPressed: () {
+                print('🔄 [UI] Tentative de rechargement des avis');
+                ref.invalidate(avisProvider(widget.infrastructure.id));
+              },
+              icon: const Icon(Icons.refresh),
+              label: const Text('Réessayer'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   void _showAddCommentDialog() {
+    print('📝 [Dialog] Tentative d\'ouverture du dialog de commentaire');
+
     final userState = ref.read(userProvider);
 
     if (!userState.isLoggedIn) {
+      print('⚠️ [Dialog] Utilisateur non connecté');
       _showAuthenticationDialog();
       return;
     }
 
+    print('✅ [Dialog] Utilisateur connecté: ${userState.user?.id}');
+
+    final commentController = TextEditingController();
+    int selectedRating = 0;
+    bool isSubmitting = false;
+    bool isSuccess = false;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Ajouter un commentaire'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              decoration: const InputDecoration(
-                hintText: 'Votre commentaire...',
-                border: OutlineInputBorder(),
-              ),
-              maxLines: 3,
-            ),
-            SizedBox(height: AppDimensions.spacingM),
-            Row(
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) => AlertDialog(
+            title: Row(
               children: [
-                Row(
-                  children: List.generate(5, (index) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 0.0,
-                      ), // réduit l'espacement
-                      child: IconButton(
-                        icon: const Icon(Icons.star_border),
-                        iconSize: 24, // optionnel: réduit la taille de l'icône
-                        padding: EdgeInsets.all(10), // réduit la zone cliquable
-                        constraints:
-                            const BoxConstraints(), // enlève les contraintes par défaut
-                        onPressed: () {
-                          // TODO: Gérer la notation
-                        },
-                      ),
-                    );
-                  }),
+                Icon(
+                  isSuccess ? Icons.check_circle : Icons.feedback_outlined,
+                  color: isSuccess ? Colors.green : AppColors.primary,
+                ),
+                SizedBox(width: AppDimensions.spacingS),
+                Expanded(
+                  child: Text(
+                    isSuccess ? 'Avis publié !' : 'Ajouter un commentaire',
+                    style: TextStyle(fontSize: 18),
+                  ),
                 ),
               ],
             ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Annuler'),
+            content: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(dialogContext).size.height * 0.5,
+                maxWidth: MediaQuery.of(dialogContext).size.width * 0.9,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (isSuccess)
+                      Padding(
+                        padding: EdgeInsets.only(
+                          bottom: AppDimensions.spacingM,
+                        ),
+                        child: Container(
+                          padding: EdgeInsets.all(AppDimensions.spacingM),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(
+                              AppDimensions.radiusM,
+                            ),
+                            border: Border.all(
+                              color: Colors.green.withOpacity(0.3),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.check_circle, color: Colors.green),
+                              SizedBox(width: AppDimensions.spacingS),
+                              Expanded(
+                                child: Text(
+                                  'Merci pour votre avis !',
+                                  style: TextStyle(
+                                    color: Colors.green,
+                                    fontWeight: FontWeight.w500,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    TextField(
+                      controller: commentController,
+                      enabled: !isSubmitting && !isSuccess,
+                      decoration: const InputDecoration(
+                        hintText: 'Votre commentaire...',
+                        border: OutlineInputBorder(),
+                      ),
+                      maxLines: 3,
+                    ),
+                    SizedBox(height: AppDimensions.spacingM),
+                    Text(
+                      'Note :',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        fontSize: 14,
+                      ),
+                    ),
+                    SizedBox(height: AppDimensions.spacingS),
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 8.0,
+                      children: List.generate(5, (index) {
+                        final starIndex = index + 1;
+                        return GestureDetector(
+                          onTap: (isSubmitting || isSuccess)
+                              ? null
+                              : () {
+                                  print(
+                                    '⭐ [Dialog] Note sélectionnée: $starIndex',
+                                  );
+                                  setDialogState(() {
+                                    selectedRating = starIndex;
+                                  });
+                                },
+                          child: Icon(
+                            starIndex <= selectedRating
+                                ? Icons.star
+                                : Icons.star_border,
+                            color: Colors.amber,
+                            size: 32,
+                          ),
+                        );
+                      }),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              if (!isSuccess)
+                TextButton(
+                  onPressed: isSubmitting
+                      ? null
+                      : () {
+                          print('❌ [Dialog] Annulation du commentaire');
+                          Navigator.pop(dialogContext);
+                        },
+                  child: const Text('Annuler'),
+                ),
+              if (isSuccess)
+                TextButton(
+                  onPressed: () {
+                    print(
+                      '🔄 [Dialog] Réinitialisation pour nouveau commentaire',
+                    );
+                    setDialogState(() {
+                      isSuccess = false;
+                      selectedRating = 0;
+                      commentController.clear();
+                    });
+                  },
+                  child: const Text('Ajouter un autre'),
+                ),
+              if (isSuccess)
+                ElevatedButton(
+                  onPressed: () {
+                    print('✅ [Dialog] Fermeture du dialog');
+                    Navigator.pop(dialogContext);
+                  },
+                  child: const Text('Fermer'),
+                ),
+              if (!isSuccess)
+                ElevatedButton(
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          print('📤 [Dialog] Tentative de publication');
+                          if (selectedRating == 0) {
+                            print('⚠️ [Dialog] Pas de note sélectionnée');
+                            ScaffoldMessenger.of(dialogContext).showSnackBar(
+                              const SnackBar(
+                                content: Text('Veuillez choisir une note.'),
+                                backgroundColor: Colors.orange,
+                              ),
+                            );
+                            return;
+                          }
+
+                          setDialogState(() {
+                            isSubmitting = true;
+                          });
+
+                          try {
+                            print('🔧 [Dialog] Récupération des services');
+                            final apiService = ref.read(apiServiceProvider);
+                            print('✅ [Dialog] apiService obtenu');
+
+                            print('📝 [Dialog] Envoi de l\'avis...');
+                            final avis = await apiService.createAvis(
+                              infrastructureId: widget.infrastructure.id,
+                              note: selectedRating,
+                              commentaire: commentController.text.trim(),
+                            );
+                            print('✅ [Dialog] Avis créé: ${avis.id}');
+
+                            print('📊 [Dialog] Enregistrement de l\'activité');
+                            await ref
+                                .read(userActivitiesProvider.notifier)
+                                .recordComment(
+                                  widget.infrastructure.id,
+                                  widget.infrastructure.name,
+                                );
+                            print('✅ [Dialog] Activité enregistrée');
+
+                            if (mounted) {
+                              print(
+                                '🎉 [Dialog] Publication réussie - affichage message',
+                              );
+                              setDialogState(() {
+                                isSuccess = true;
+                                isSubmitting = false;
+                                // Réinitialiser immédiatement le formulaire
+                                commentController.clear();
+                                selectedRating = 0;
+                              });
+
+                              // Afficher un SnackBar pour confirmation (utilise le bon context)
+                              print(
+                                '📢 [Dialog] Affichage SnackBar de confirmation',
+                              );
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.check_circle,
+                                        color: Colors.white,
+                                      ),
+                                      SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          'Votre avis a été publié avec succès !',
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  backgroundColor: Colors.green,
+                                  duration: Duration(seconds: 4),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+
+                              // Différer l'invalidation après la mise à jour UI
+                              print(
+                                '⏱️ [Dialog] Programmation de l\'invalidation',
+                              );
+                              Future.delayed(
+                                const Duration(milliseconds: 300),
+                                () {
+                                  if (mounted) {
+                                    print(
+                                      '🔄 [Dialog] Invalidation du provider',
+                                    );
+                                    ref.invalidate(
+                                      avisProvider(widget.infrastructure.id),
+                                    );
+                                  }
+                                },
+                              );
+                            }
+                          } catch (e, stackTrace) {
+                            print('💥 [Dialog] Erreur: $e');
+                            print('📍 [Dialog] StackTrace: $stackTrace');
+                            if (mounted) {
+                              setDialogState(() {
+                                isSubmitting = false;
+                              });
+                              ScaffoldMessenger.of(dialogContext).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Erreur: ${e.toString().replaceAll('Exception: ', '')}',
+                                  ),
+                                  backgroundColor: Colors.red,
+                                  duration: Duration(seconds: 5),
+                                ),
+                              );
+                            }
+                          }
+                        },
+                  child: isSubmitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('Publier'),
+                ),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () {
-              // TODO: Sauvegarder le commentaire
-              Navigator.pop(context);
-            },
-            child: const Text('Publier'),
-          ),
-        ],
-      ),
-    );
+        );
+      },
+    ).whenComplete(() {
+      print('🔚 [Dialog] Dialog fermé');
+      commentController.dispose();
+    });
+  }
+
+  double _calculateAverageRating(List<Avis> avis) {
+    if (avis.isEmpty) return 0;
+    final total = avis.fold<int>(0, (sum, item) => sum + item.note);
+    return total / avis.length;
+  }
+
+  String _formatRelativeTime(DateTime date) {
+    final now = DateTime.now();
+    final difference = now.difference(date);
+    if (difference.inDays >= 1) {
+      return 'Il y a ${difference.inDays} j';
+    }
+    if (difference.inHours >= 1) {
+      return 'Il y a ${difference.inHours} h';
+    }
+    if (difference.inMinutes >= 1) {
+      return 'Il y a ${difference.inMinutes} min';
+    }
+    return 'A l\'instant';
   }
 
   Widget _buildActionButtons() {
@@ -1498,7 +1837,9 @@ class _ReportDialogState extends State<_ReportDialog> {
                       children: [
                         Expanded(
                           child: OutlinedButton.icon(
-                            onPressed: _canAddImages ? _pickImageFromGallery : null,
+                            onPressed: _canAddImages
+                                ? _pickImageFromGallery
+                                : null,
                             icon: const Icon(Icons.photo_library),
                             label: const Text('Galerie'),
                             style: OutlinedButton.styleFrom(
@@ -1554,10 +1895,10 @@ class _ReportDialogState extends State<_ReportDialog> {
                           physics: const NeverScrollableScrollPhysics(),
                           gridDelegate:
                               const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 3,
-                            crossAxisSpacing: 8,
-                            mainAxisSpacing: 8,
-                          ),
+                                crossAxisCount: 3,
+                                crossAxisSpacing: 8,
+                                mainAxisSpacing: 8,
+                              ),
                           itemCount: _selectedImages.length,
                           itemBuilder: (context, index) {
                             return Stack(
@@ -1567,8 +1908,9 @@ class _ReportDialogState extends State<_ReportDialog> {
                                     borderRadius: BorderRadius.circular(
                                       AppDimensions.radiusM,
                                     ),
-                                    border:
-                                        Border.all(color: Colors.grey[300]!),
+                                    border: Border.all(
+                                      color: Colors.grey[300]!,
+                                    ),
                                   ),
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(

@@ -42,6 +42,33 @@ class Infrastructure {
   });
 
   factory Infrastructure.fromJson(Map<String, dynamic> json) {
+    // Helper pour parser les images qui peuvent être des strings ou des objets
+    List<String> parseImages(dynamic imagesData) {
+      if (imagesData == null) return [];
+
+      final List imagesList = imagesData is List ? imagesData : [];
+      return imagesList
+          .map((item) {
+            if (item is String) {
+              return item;
+            } else if (item is Map) {
+              // Si c'est un objet, extraire l'URL
+              return (item['url'] ?? item['uri'] ?? '').toString();
+            }
+            return '';
+          })
+          .where((url) => url.isNotEmpty)
+          .toList();
+    }
+
+    // Helper pour parser opening_hours qui peut être un objet ou null
+    Map<String, dynamic> parseOpeningHours(dynamic hoursData) {
+      if (hoursData == null) return {};
+      if (hoursData is Map<String, dynamic>) return hoursData;
+      if (hoursData is Map) return Map<String, dynamic>.from(hoursData);
+      return {};
+    }
+
     return Infrastructure(
       id: json['id'] ?? '',
       name: json['name'] ?? '',
@@ -50,22 +77,26 @@ class Infrastructure {
       latitude: (json['latitude'] ?? 0.0).toDouble(),
       longitude: (json['longitude'] ?? 0.0).toDouble(),
       address: json['address'] ?? '',
-      images: List<String>.from(json['images'] ?? []),
-      openingHours: Map<String, dynamic>.from(json['opening_hours'] ?? {}),
-      phone: json['phone'],
-      website: json['website'],
-      rating: (json['rating'] ?? 0.0).toDouble(),
-      reviewCount: json['review_count'] ?? 0,
-      isAccessible: json['is_accessible'] ?? true,
-      isActive: json['is_active'] ?? true,
-      createdAt: DateTime.parse(
-        json['created_at'] ?? DateTime.now().toIso8601String(),
+      images: parseImages(json['images'] ?? json['photos']),
+      openingHours: parseOpeningHours(
+        json['opening_hours'] ?? json['horaires'],
       ),
-      updatedAt: DateTime.parse(
-        json['updated_at'] ?? DateTime.now().toIso8601String(),
-      ),
-      submittedBy: json['submitted_by'],
-      isVerified: json['is_verified'] ?? false,
+      phone: json['phone']?.toString(),
+      website: json['website']?.toString(),
+      rating: (json['rating'] ?? json['note_moyenne'] ?? 0.0).toDouble(),
+      reviewCount: json['review_count'] ?? json['nombre_avis'] ?? 0,
+      isAccessible:
+          json['is_accessible'] ?? json['accessibilite']?['pmr'] ?? true,
+      isActive: json['is_active'] ?? json['valide'] ?? true,
+      createdAt:
+          DateTime.tryParse(json['created_at']?.toString() ?? '') ??
+          DateTime.now(),
+      updatedAt:
+          DateTime.tryParse(json['updated_at']?.toString() ?? '') ??
+          DateTime.now(),
+      submittedBy:
+          json['submitted_by']?.toString() ?? json['cree_par']?.toString(),
+      isVerified: json['is_verified'] ?? json['valide'] ?? false,
     );
   }
 

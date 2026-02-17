@@ -1,7 +1,7 @@
 /// Modèle représentant l'historique des contributions d'un utilisateur
 class ContributionHistory {
-  final int id;
-  final int userId;
+  final String id;
+  final String userId;
   final String contributionType;
   final int pointsEarned;
   final String? relatedEntityId;
@@ -19,15 +19,27 @@ class ContributionHistory {
   });
 
   factory ContributionHistory.fromJson(Map<String, dynamic> json) {
+    final rawId = json['id'] ?? json['contribution_id'];
+    final rawUserId = json['user_id'] ?? json['userId'];
+    final rawPoints = json['points_earned'] ?? json['points_awarded'];
+    final rawDate = json['created_at'] ?? json['contribution_date'];
+
     return ContributionHistory(
-      id: json['id'] as int,
-      userId: json['user_id'] as int,
+      id: rawId?.toString() ?? 'unknown',
+      userId: rawUserId?.toString() ?? 'unknown',
       contributionType: json['contribution_type'] as String,
-      pointsEarned: json['points_earned'] as int,
-      relatedEntityId: json['related_entity_id'] as String?,
+      pointsEarned: _parseInt(rawPoints),
+      relatedEntityId: json['related_entity_id']?.toString(),
       details: json['details'] as Map<String, dynamic>?,
-      createdAt: DateTime.parse(json['created_at'] as String),
+      createdAt: DateTime.parse(rawDate.toString()),
     );
+  }
+
+  static int _parseInt(dynamic value) {
+    if (value == null) return 0;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value.toString()) ?? 0;
   }
 
   Map<String, dynamic> toJson() {
@@ -79,8 +91,8 @@ class ContributionHistory {
   }
 
   ContributionHistory copyWith({
-    int? id,
-    int? userId,
+    String? id,
+    String? userId,
     String? contributionType,
     int? pointsEarned,
     String? relatedEntityId,
@@ -114,16 +126,33 @@ class ContributionHistoryPage {
   });
 
   factory ContributionHistoryPage.fromJson(Map<String, dynamic> json) {
+    final rawContributions = json['contributions'] ?? json['data'];
+    final pagination = json['pagination'] as Map<String, dynamic>?;
+
+    if (rawContributions is List && pagination != null) {
+      return ContributionHistoryPage(
+        contributions: rawContributions
+            .map(
+              (item) =>
+                  ContributionHistory.fromJson(item as Map<String, dynamic>),
+            )
+            .toList(),
+        totalCount: _parseInt(pagination['total']),
+        currentPage: _parseInt(pagination['page']),
+        totalPages: _parseInt(pagination['pages']),
+      );
+    }
+
     return ContributionHistoryPage(
-      contributions: (json['contributions'] as List<dynamic>)
+      contributions: (rawContributions as List<dynamic>)
           .map(
             (item) =>
                 ContributionHistory.fromJson(item as Map<String, dynamic>),
           )
           .toList(),
-      totalCount: json['total_count'] as int,
-      currentPage: json['current_page'] as int,
-      totalPages: json['total_pages'] as int,
+      totalCount: _parseInt(json['total_count']),
+      currentPage: _parseInt(json['current_page']),
+      totalPages: _parseInt(json['total_pages']),
     );
   }
 
@@ -134,5 +163,12 @@ class ContributionHistoryPage {
       'current_page': currentPage,
       'total_pages': totalPages,
     };
+  }
+
+  static int _parseInt(dynamic value) {
+    if (value == null) return 0;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value.toString()) ?? 0;
   }
 }

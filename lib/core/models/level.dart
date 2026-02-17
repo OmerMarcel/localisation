@@ -19,13 +19,19 @@ class Level {
   });
 
   factory Level.fromJson(Map<String, dynamic> json) {
+    final rawId = json['id'] ?? json['level_id'];
+    final rawName = json['name'] ?? json['level_name'];
+    final rawMinPoints = json['min_points'] ?? json['points_required'];
+
     return Level(
-      id: json['id'] as int,
-      name: json['name'] as String,
+      id: rawId is int ? rawId : int.tryParse(rawId.toString()) ?? 0,
+      name: rawName?.toString() ?? 'Niveau',
       description: json['description'] as String?,
-      minPoints: json['min_points'] as int,
+      minPoints: rawMinPoints is int
+          ? rawMinPoints
+          : int.tryParse(rawMinPoints.toString()) ?? 0,
       maxPoints: json['max_points'] as int?,
-      icon: json['icon'] as String?,
+      icon: (json['icon'] ?? json['badge_icon']) as String?,
       color: json['color'] as String?,
     );
   }

@@ -5,6 +5,8 @@ import '../models/level.dart';
 import '../models/badge.dart';
 import '../models/contribution_history.dart';
 import '../models/leaderboard_entry.dart';
+import '../models/exchange_config.dart';
+import '../models/reward_exchange.dart';
 import '../services/reward_service.dart';
 
 /// Provider pour l'instance du RewardService
@@ -45,6 +47,19 @@ final allBadgesProvider = FutureProvider<List<Badge>>((ref) async {
   final rewardService = ref.watch(rewardServiceProvider);
   return await rewardService.getAllBadges();
 });
+
+/// Provider pour récupérer la configuration d'echange
+final exchangeConfigProvider = FutureProvider<ExchangeConfig>((ref) async {
+  final rewardService = ref.watch(rewardServiceProvider);
+  return await rewardService.getExchangeConfig();
+});
+
+/// Provider pour récupérer l'historique des echanges
+final exchangeHistoryProvider =
+    FutureProvider.family<PaginatedExchangeHistory, int>((ref, page) async {
+      final rewardService = ref.watch(rewardServiceProvider);
+      return await rewardService.getMyExchanges(page: page, limit: 20);
+    });
 
 /// Provider pour savoir si l'utilisateur a progressé de niveau récemment
 /// (peut être utilisé pour afficher une animation)

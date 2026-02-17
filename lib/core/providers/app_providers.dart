@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/legacy.dart';
 import 'package:geolocator/geolocator.dart';
 import '../models/infrastructure.dart';
 import '../models/contribution.dart';
+import '../models/avis.dart';
 import '../models/user_activity.dart';
 import '../services/location_service.dart';
 import '../services/api_service.dart';
@@ -77,6 +78,7 @@ class InfrastructuresNotifier
 
       try {
         // 1. Essayer de charger depuis l'API
+        print('🌐 [Provider] Tentative de chargement depuis API backend...');
         infrastructures = await _apiService.getInfrastructures(
           category: category,
           latitude: latitude,
@@ -92,10 +94,10 @@ class InfrastructuresNotifier
             '💾 ${infrastructures.length} marqueurs sauvegardés automatiquement en cache local',
           );
         }
-      } catch (e) {
-        print(
-          '⚠️ API non disponible, tentative de chargement depuis le cache local...',
-        );
+      } catch (e, stackTrace) {
+        print('⚠️ API non disponible: $e');
+        print('📍 StackTrace: $stackTrace');
+        print('🔄 Tentative de chargement depuis le cache local...');
 
         // 3. Charger depuis le cache local Hive en priorité
         if (latitude != null && longitude != null && radius != null) {
@@ -249,6 +251,14 @@ final infrastructuresProvider =
 // Provider pour les services
 final apiServiceProvider = Provider<ApiService>((ref) {
   return ApiService();
+});
+
+final avisProvider = FutureProvider.family<List<Avis>, String>((
+  ref,
+  infrastructureId,
+) async {
+  final apiService = ref.read(apiServiceProvider);
+  return apiService.getAvis(infrastructureId);
 });
 
 final storageServiceProvider = Provider<StorageService>((ref) {

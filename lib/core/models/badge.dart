@@ -1,6 +1,6 @@
 /// Modèle représentant un badge de récompense
 class Badge {
-  final int id;
+  final String id;
   final String name;
   final String? description;
   final String? icon;
@@ -23,17 +23,28 @@ class Badge {
   });
 
   factory Badge.fromJson(Map<String, dynamic> json) {
+    final rawId =
+        json['id'] ?? json['badge_code'] ?? json['badgeId'] ?? json['code'];
+    final criteria = json['criteria_json'] as Map<String, dynamic>?;
+
     return Badge(
-      id: json['id'] as int,
-      name: json['name'] as String,
+      id: rawId?.toString() ?? (json['name']?.toString() ?? 'unknown'),
+      name: (json['name'] ?? json['badge_name']).toString(),
       description: json['description'] as String?,
-      icon: json['icon'] as String?,
+      icon: (json['icon'] ?? json['badge_icon']) as String?,
       imageUrl: json['image_url'] as String?,
-      category: json['category'] as String,
-      requiredCount: json['required_count'] as int,
+      category: (json['category'] ?? criteria?['type'] ?? 'general').toString(),
+      requiredCount: _parseInt(json['required_count'] ?? criteria?['count']),
       color: json['color'] as String?,
       isActive: json['is_active'] as bool? ?? true,
     );
+  }
+
+  static int _parseInt(dynamic value) {
+    if (value == null) return 0;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value.toString()) ?? 0;
   }
 
   Map<String, dynamic> toJson() {
@@ -51,7 +62,7 @@ class Badge {
   }
 
   Badge copyWith({
-    int? id,
+    String? id,
     String? name,
     String? description,
     String? icon,

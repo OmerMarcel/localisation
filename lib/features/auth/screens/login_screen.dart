@@ -126,7 +126,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                 // Titre
                 Text(
-                  'CotoNav',
+                  'KutonouTché',
                   style: GoogleFonts.poppins(
                     fontSize: 32.sp,
                     fontWeight: FontWeight.bold,
