@@ -32,7 +32,7 @@ class ContributionService {
     required String category,
     required double latitude,
     required double longitude,
-    required String address,
+    required String quartier,
     List<File>? imageFiles,
     String? phone,
     String? website,
@@ -88,7 +88,7 @@ class ContributionService {
         'description': description,
         'latitude': latitude,
         'longitude': longitude,
-        'address': address,
+        'quartier': quartier,
         'images': imageUrls, // toujours un tableau JSON (même vide)
         if (phone != null && phone.isNotEmpty) 'phone': phone,
         if (website != null && website.isNotEmpty) 'website': website,
@@ -162,7 +162,7 @@ class ContributionService {
         category: category,
         latitude: latitude,
         longitude: longitude,
-        address: address,
+        address: quartier,
         images: normalizedResponseImages.isNotEmpty
             ? normalizedResponseImages
             : normalizedUploadedImages,
@@ -184,6 +184,46 @@ class ContributionService {
       }
       _log('❌ Erreur lors de la création de la proposition : $e');
       throw Exception('Erreur lors de la soumission: ${e.toString()}');
+    }
+  }
+
+  /// Recuperer la localisation administrative depuis le backend
+  Future<Map<String, dynamic>?> fetchAdministrativeLocation({
+    required double latitude,
+    required double longitude,
+    String? authToken,
+  }) async {
+    try {
+      String? token = authToken;
+      if (token == null || token.isEmpty) {
+        final storageService = StorageService();
+        token = await storageService.getAuthToken();
+      }
+
+      final uri = Uri.parse(
+        '$_baseUrl/api/administrative-location?latitude=$latitude&longitude=$longitude',
+      );
+
+      final headers = <String, String>{'Content-Type': 'application/json'};
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      final response = await http.get(uri, headers: headers);
+
+      if (response.statusCode != 200) {
+        _log('❌ Erreur localisation administrative: ${response.body}');
+        return null;
+      }
+
+      final responseData = jsonDecode(response.body);
+      final data = responseData['data'];
+      return data is Map<String, dynamic>
+          ? Map<String, dynamic>.from(data)
+          : null;
+    } catch (e) {
+      _log('❌ Erreur lors de la recuperation de la localisation: $e');
+      return null;
     }
   }
 

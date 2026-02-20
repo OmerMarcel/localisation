@@ -23,7 +23,7 @@ class _ContributeScreenState extends ConsumerState<ContributeScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
-  final _addressController = TextEditingController();
+  final _quartierController = TextEditingController();
   final _phoneController = TextEditingController();
   final _websiteController = TextEditingController();
 
@@ -31,6 +31,10 @@ class _ContributeScreenState extends ConsumerState<ContributeScreen> {
   Position? _currentPosition;
   List<File> _selectedImages = [];
   bool _isSubmitting = false;
+  bool _isLoadingAdminLocation = false;
+  String? _departementName;
+  String? _communeName;
+  String? _arrondissementName;
 
   // Ajout du service de contribution
   final ContributionService _contributionService = ContributionService();
@@ -48,12 +52,82 @@ class _ContributeScreenState extends ConsumerState<ContributeScreen> {
   final TextEditingController _equipmentController = TextEditingController();
 
   static const List<Map<String, String>> _backendCategories = [
-    {'value': 'toilettes_publiques', 'label': 'Toilettes publiques'},
-    {'value': 'parc_jeux', 'label': 'Parc de jeux'},
+    // Services Administratifs
+    {'value': 'mairie', 'label': 'Mairie'},
+    {'value': 'prefecture', 'label': 'Préfecture'},
+    {'value': 'tribunal', 'label': 'Tribunal'},
+    {'value': 'gendarmerie', 'label': 'Gendarmerie'},
+    {'value': 'police', 'label': 'Police'},
+
+    // Services Éducatifs
+    {'value': 'ecole_primaire', 'label': 'École primaire'},
+    {'value': 'ecole_secondaire', 'label': 'École secondaire'},
+    {'value': 'universite', 'label': 'Université'},
+    {'value': 'centre_formation', 'label': 'Centre de formation'},
+    {'value': 'bibliotheque', 'label': 'Bibliothèque'},
+
+    // Services de Santé
+    {'value': 'hopital', 'label': 'Hôpital'},
     {'value': 'centre_sante', 'label': 'Centre de santé'},
+    {'value': 'clinique', 'label': 'Clinique'},
+    {'value': 'pharmacie', 'label': 'Pharmacie'},
+    {'value': 'laboratoire', 'label': 'Laboratoire'},
+
+    // Services Religieux
+    {'value': 'eglise', 'label': 'Église'},
+    {'value': 'mosquee', 'label': 'Mosquée'},
+    {'value': 'synagogue', 'label': 'Synagogue'},
+    {'value': 'temple', 'label': 'Temple'},
+
+    // Installations Sportives et Récréatives
     {'value': 'installation_sportive', 'label': 'Installation sportive'},
+    {'value': 'parc_jeux', 'label': 'Parc de jeux'},
+    {'value': 'terrain_football', 'label': 'Terrain de football'},
+    {'value': 'terrain_tennis', 'label': 'Terrain de tennis'},
+    {'value': 'piscine', 'label': 'Piscine'},
+    {'value': 'gymnase', 'label': 'Gymnase'},
+    {'value': 'stade', 'label': 'Stade'},
+    {'value': 'parc_loisirs', 'label': 'Parc de loisirs'},
+
+    // Sanitaires et Hygiène
+    {'value': 'toilettes_publiques', 'label': 'Toilettes publiques'},
+    {'value': 'point_eau', 'label': 'Point d\'eau'},
+    {'value': 'douche_publique', 'label': 'Douche publique'},
+
+    // Commerces et Services
+    {'value': 'marche', 'label': 'Marché'},
+    {'value': 'supermarche', 'label': 'Supermarché'},
+    {'value': 'restaurant', 'label': 'Restaurant'},
+    {'value': 'hotel', 'label': 'Hôtel'},
+    {'value': 'banque', 'label': 'Banque'},
+    {'value': 'agence_voyage', 'label': 'Agence de voyage'},
+    {'value': 'coiffeur', 'label': 'Coiffeur'},
+    {'value': 'salon_beaute', 'label': 'Salon de beauté'},
+
+    // Transports et Stationnement
+    {'value': 'gare_routiere', 'label': 'Gare routière'},
+    {'value': 'gare_ferroviaire', 'label': 'Gare ferroviaire'},
+    {'value': 'aeroport', 'label': 'Aéroport'},
+    {'value': 'port', 'label': 'Port'},
+    {'value': 'parking', 'label': 'Parking'},
+    {'value': 'station_taxi', 'label': 'Station de taxi'},
+
+    // Espace de Divertissement et Culture
     {'value': 'espace_divertissement', 'label': 'Espace de divertissement'},
-    {'value': 'autre', 'label': 'Autre infrastructure'},
+    {'value': 'cinema', 'label': 'Cinéma'},
+    {'value': 'theatre', 'label': 'Théâtre'},
+    {'value': 'musee', 'label': 'Musée'},
+    {'value': 'galerie_art', 'label': 'Galerie d\'art'},
+    {'value': 'salle_concert', 'label': 'Salle de concert'},
+
+    // Services Sociaux et Communautaires
+    {'value': 'centre_social', 'label': 'Centre social'},
+    {'value': 'orphelinat', 'label': 'Orphelinat'},
+    {'value': 'foyer_personnes_agees', 'label': 'Foyer pour personnes âgées'},
+    {
+      'value': 'centre_aide_handicapes',
+      'label': 'Centre d\'aide aux handicapés',
+    },
   ];
 
   void _log(String message) {
@@ -70,7 +144,7 @@ class _ContributeScreenState extends ConsumerState<ContributeScreen> {
   void dispose() {
     _nameController.dispose();
     _descriptionController.dispose();
-    _addressController.dispose();
+    _quartierController.dispose();
     _phoneController.dispose();
     _websiteController.dispose();
     for (final controller in _openingHoursControllers.values) {
@@ -86,6 +160,29 @@ class _ContributeScreenState extends ConsumerState<ContributeScreen> {
         .getCurrentPosition();
     setState(() {
       _currentPosition = position;
+    });
+    if (position != null) {
+      await _loadAdministrativeLocation(position);
+    }
+  }
+
+  Future<void> _loadAdministrativeLocation(Position position) async {
+    setState(() {
+      _isLoadingAdminLocation = true;
+    });
+
+    final data = await _contributionService.fetchAdministrativeLocation(
+      latitude: position.latitude,
+      longitude: position.longitude,
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      _departementName = data?['departement_nom']?.toString();
+      _communeName = data?['commune_nom']?.toString();
+      _arrondissementName = data?['arrondissement_nom']?.toString();
+      _isLoadingAdminLocation = false;
     });
   }
 
@@ -267,7 +364,7 @@ class _ContributeScreenState extends ConsumerState<ContributeScreen> {
       _log('📝 Données du formulaire:');
       _log('  - Nom: ${_nameController.text.trim()}');
       _log('  - Catégorie: $_selectedCategory');
-      _log('  - Adresse: ${_addressController.text.trim()}');
+      _log('  - Quartier: ${_quartierController.text.trim()}');
       _log(
         '  - Position: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}',
       );
@@ -299,7 +396,7 @@ class _ContributeScreenState extends ConsumerState<ContributeScreen> {
         category: _selectedCategory!,
         latitude: _currentPosition!.latitude,
         longitude: _currentPosition!.longitude,
-        address: _addressController.text.trim(),
+        quartier: _quartierController.text.trim(),
         imageFiles: _selectedImages.isNotEmpty ? _selectedImages : null,
         phone: _phoneController.text.isNotEmpty
             ? _phoneController.text.trim()
@@ -355,7 +452,7 @@ class _ContributeScreenState extends ConsumerState<ContributeScreen> {
     _formKey.currentState?.reset();
     _nameController.clear();
     _descriptionController.clear();
-    _addressController.clear();
+    _quartierController.clear();
     _phoneController.clear();
     _websiteController.clear();
     for (final controller in _openingHoursControllers.values) {
@@ -563,26 +660,29 @@ class _ContributeScreenState extends ConsumerState<ContributeScreen> {
 
               SizedBox(height: AppDimensions.spacingM),
 
-              // Adresse
+              // Quartier
               Text(
-                'Adresse *',
+                'Quartier *',
                 style: AppTextStyles.label.copyWith(fontSize: 14),
               ),
               SizedBox(height: AppDimensions.spacingS),
               TextFormField(
-                controller: _addressController,
+                controller: _quartierController,
                 decoration: const InputDecoration(
-                  hintText: 'Ex: Avenue Delorme, Cotonou',
+                  hintText: 'Ex: Fifadji, Cotonou',
                 ),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return 'Veuillez entrer une adresse';
+                    return 'Veuillez entrer un quartier';
                   }
                   return null;
                 },
               ),
 
               SizedBox(height: AppDimensions.spacingM),
+
+              // Localisation administrative - Chargée silencieusement en arrière-plan
+              // (Les données sont récupérées mais pas affichées aux utilisateurs)
 
               // Description
               Text(

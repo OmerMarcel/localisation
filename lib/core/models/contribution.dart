@@ -65,6 +65,8 @@ class Contribution {
         0.0;
 
     final address =
+        json['quartier'] ??
+        localisationRaw['quartier'] ??
         json['address'] ??
         localisationRaw['adresse'] ??
         localisationRaw['address'] ??
@@ -128,6 +130,7 @@ class Contribution {
       'type': 'Point',
       'coordinates': [longitude, latitude],
       'adresse': address,
+      'quartier': address,
     };
 
     final contactPayload = <String, dynamic>{
@@ -147,6 +150,7 @@ class Contribution {
       'latitude': latitude,
       'longitude': longitude,
       'address': address,
+      'quartier': address,
       'localisation': localisationPayload,
       'images': images,
       'photos': images,

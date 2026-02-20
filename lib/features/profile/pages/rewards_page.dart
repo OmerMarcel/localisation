@@ -9,6 +9,7 @@ import '../widgets/badge_widget.dart';
 import 'leaderboard_page.dart';
 import 'contribution_history_page.dart';
 import 'exchange_points_page.dart';
+import 'wallet_page.dart';
 
 /// Écran principal des récompenses
 class RewardsScreen extends ConsumerStatefulWidget {
@@ -25,7 +26,7 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
   }
 
   @override
@@ -55,6 +56,7 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen>
             Tab(icon: Icon(Icons.emoji_events), text: 'Badges'),
             Tab(icon: Icon(Icons.leaderboard), text: 'Classement'),
             Tab(icon: Icon(Icons.currency_exchange), text: 'Echange'),
+            Tab(icon: Icon(Icons.wallet), text: 'Portefeuille'),
           ],
         ),
       ),
@@ -72,6 +74,9 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen>
 
           // Onglet 4: Echange de points
           const ExchangePointsPage(),
+
+          // Onglet 5: Portefeuille
+          const WalletPage(),
         ],
       ),
     );

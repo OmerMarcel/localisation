@@ -330,30 +330,51 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
 
     final queryLower = query.toLowerCase().trim();
+    final normalizedQuery = _normalizeCategory(query);
 
-    // 1. Suggestions locales instantanées (mots-clés prédéfinis)
-    final localSuggestions = _predefinedKeywords
-        .where((keyword) => keyword.toLowerCase().contains(queryLower))
-        .take(5)
+    // 1. Obtenir les infrastructures locales
+    final infrastructures = ref.read(infrastructuresProvider).value ?? [];
+    final allSuggestions = <String>{};
+
+    // 2. Suggestions par noms d'infrastructures
+    for (final infra in infrastructures) {
+      final normalizedName = _normalizeCategory(infra.name);
+      if (normalizedName.contains(normalizedQuery)) {
+        allSuggestions.add(infra.name);
+      }
+    }
+
+    // 3. Suggestions par catégories/sous-catégories
+    final categories = infrastructures.map((infra) => infra.category).toSet();
+
+    for (final category in categories) {
+      final normalizedCategory = _normalizeCategory(category);
+      if (normalizedCategory.contains(normalizedQuery)) {
+        allSuggestions.add(category);
+      }
+    }
+
+    // 4. Ajouter quelques mots-clés prédéfinis populaires
+    final keywordSuggestions = _predefinedKeywords
+        .where(
+          (keyword) => _normalizeCategory(keyword).contains(normalizedQuery),
+        )
+        .take(3)
         .toList();
+    allSuggestions.addAll(keywordSuggestions);
 
-    // 2. Combiner avec les suggestions de l'API si query >= 2 caractères
-    List<String> apiSuggestions = [];
-    if (query.trim().length >= 2) {
+    // 5. Si moins de 5 suggestions, chercher avec l'API Google Places
+    if (allSuggestions.length < 5 && query.trim().length >= 3) {
       try {
-        apiSuggestions = await SearchService.getSuggestions(query);
+        final apiSuggestions = await SearchService.getSuggestions(query);
+        allSuggestions.addAll(apiSuggestions.take(3));
       } catch (e) {
         print('Erreur suggestions API: $e');
       }
     }
 
-    // 3. Fusionner et dédupliquer
-    final allSuggestions = <String>{};
-    allSuggestions.addAll(localSuggestions);
-    allSuggestions.addAll(apiSuggestions);
-
     setState(() {
-      _suggestions = allSuggestions.take(8).toList();
+      _suggestions = allSuggestions.take(10).toList();
     });
   }
 
@@ -750,12 +771,14 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       }
     }
 
-    final categoryLower = category.toLowerCase();
+    final normalizedCategory = _normalizeCategory(category);
 
-    // Filtrer par catégorie ou nom
+    // Filtrer par catégorie ou nom (normalisation pour gérer accents/snake_case)
     final matchingInfrastructures = infrastructures.where((infra) {
-      return infra.name.toLowerCase().contains(categoryLower) ||
-          infra.category.toLowerCase().contains(categoryLower);
+      final normalizedName = _normalizeCategory(infra.name);
+      final normalizedInfraCategory = _normalizeCategory(infra.category);
+      return normalizedName.contains(normalizedCategory) ||
+          normalizedInfraCategory.contains(normalizedCategory);
     }).toList();
 
     if (matchingInfrastructures.isEmpty) {
@@ -911,13 +934,19 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   AutocompleteOnSelected<String> onSelected,
                   Iterable<String> options,
                 ) {
+                  final infrastructures =
+                      ref.read(infrastructuresProvider).value ?? [];
+                  final categories = infrastructures
+                      .map((i) => i.category)
+                      .toSet();
+
                   return Align(
                     alignment: Alignment.topLeft,
                     child: Material(
                       elevation: 4,
                       borderRadius: BorderRadius.circular(12),
                       child: Container(
-                        constraints: const BoxConstraints(maxHeight: 200),
+                        constraints: const BoxConstraints(maxHeight: 250),
                         width: MediaQuery.of(context).size.width - 32,
                         margin: const EdgeInsets.only(top: 8),
                         decoration: BoxDecoration(
@@ -930,6 +959,36 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                           itemCount: options.length,
                           itemBuilder: (BuildContext context, int index) {
                             final String option = options.elementAt(index);
+
+                            // Déterminer si c'est une catégorie ou un nom d'infrastructure
+                            final isCategory = categories.contains(option);
+                            final isInfrastructure = infrastructures.any(
+                              (i) => i.name == option,
+                            );
+
+                            IconData iconData;
+                            Color iconColor;
+                            String subtitle = '';
+
+                            if (isInfrastructure) {
+                              final infra = infrastructures.firstWhere(
+                                (i) => i.name == option,
+                              );
+                              iconData = _getCategoryIcon(infra.category);
+                              iconColor = AppColors.primary;
+                              subtitle = infra.category;
+                            } else if (isCategory) {
+                              iconData = Icons.category;
+                              iconColor = AppColors.secondary;
+                              final count = infrastructures
+                                  .where((i) => i.category == option)
+                                  .length;
+                              subtitle = '$count lieu${count > 1 ? 'x' : ''}';
+                            } else {
+                              iconData = Icons.search;
+                              iconColor = AppColors.textSecondary;
+                            }
+
                             return InkWell(
                               onTap: () => onSelected(option),
                               child: Container(
@@ -939,16 +998,27 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                 ),
                                 child: Row(
                                   children: [
-                                    Icon(
-                                      Icons.location_on,
-                                      color: AppColors.textSecondary,
-                                      size: 20,
-                                    ),
+                                    Icon(iconData, color: iconColor, size: 20),
                                     SizedBox(width: AppDimensions.spacingS),
                                     Expanded(
-                                      child: Text(
-                                        option,
-                                        style: AppTextStyles.bodyMedium,
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            option,
+                                            style: AppTextStyles.bodyMedium,
+                                          ),
+                                          if (subtitle.isNotEmpty)
+                                            Text(
+                                              subtitle,
+                                              style: AppTextStyles.bodySmall
+                                                  .copyWith(
+                                                    color:
+                                                        AppColors.textSecondary,
+                                                  ),
+                                            ),
+                                        ],
                                       ),
                                     ),
                                     Icon(

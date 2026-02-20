@@ -11,9 +11,9 @@ class AppConstants {
   // ⚠️ IMPORTANT : Changez cette IP selon votre environnement
   // - Émulateur Android : 'http://10.0.2.2:5000'
   // - Appareil physique (même WiFi) : 'http://VOTRE_IP_LOCALE:5000'
-    // Votre IP actuelle détectée : 172.29.70.189
-    static const String baseUrl =
-      'http://172.29.70.189:5000'; // Backend local (appareil physique sur le meme WiFi)
+  // Votre IP actuelle détectée : 10.50.28.189
+  static const String baseUrl =
+      'http://10.50.28.189:5000'; // Backend local (appareil physique sur le meme WiFi)
 
   /// Supabase Auth (OTP, mot de passe oublié). Même projet que le backend.
   /// Override via --dart-define=SUPABASE_URL=... et SUPABASE_ANON_KEY=... si besoin.
