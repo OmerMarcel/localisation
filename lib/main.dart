@@ -19,15 +19,26 @@ import 'core/services/api_service.dart';
 import 'core/models/infrastructure_hive.dart';
 import 'features/home/home_screen.dart';
 import 'features/notifications/services/fcm_service.dart';
+import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // 🔥 Initialisation Firebase obligatoire
-  await Firebase.initializeApp();
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (e) {
+    print('⚠️ Initialisation Firebase Warning/Error: $e');
+  }
 
   // 🔥 Enregistrer le handler pour les messages en arrière-plan AVANT toute autre chose
-  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  try {
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  } catch (e) {
+    print('⚠️ FirebaseMessaging background handler notice: $e');
+  }
 
   // 🔥 Activation Firebase App Check - DÉSACTIVÉ TEMPORAIREMENT
   // App Check bloque l'authentification avant configuration complète

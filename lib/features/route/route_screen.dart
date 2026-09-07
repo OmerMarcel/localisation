@@ -7,6 +7,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/models/infrastructure.dart';
 import '../../core/services/directions_service.dart';
 import '../../core/services/google_maps_service.dart';
+import '../../core/services/voice_guidance_service.dart';
 
 class RouteScreen extends ConsumerStatefulWidget {
   final Infrastructure destination;
@@ -35,8 +36,36 @@ class _RouteScreenState extends ConsumerState<RouteScreen> {
   @override
   void initState() {
     super.initState();
+    VoiceGuidanceService().addListener(_onVoiceGuidanceUpdate);
     _loadDirections();
     _setupMarkers();
+  }
+
+  @override
+  void dispose() {
+    VoiceGuidanceService().removeListener(_onVoiceGuidanceUpdate);
+    VoiceGuidanceService().stopNavigation();
+    super.dispose();
+  }
+
+  void _onVoiceGuidanceUpdate() {
+    if (mounted) {
+      setState(() {});
+      final lastPos = VoiceGuidanceService().lastPosition;
+      if (lastPos != null &&
+          VoiceGuidanceService().isNavigating &&
+          _mapController != null) {
+        _mapController!.animateCamera(
+          CameraUpdate.newCameraPosition(
+            CameraPosition(
+              target: LatLng(lastPos.latitude, lastPos.longitude),
+              zoom: 17.5,
+              tilt: 45.0, // Perspective 3D immersive pour la navigation
+            ),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _loadDirections() async {
@@ -306,14 +335,66 @@ class _RouteScreenState extends ConsumerState<RouteScreen> {
     }
   }
 
+  IconData _getManeuverIcon(String text) {
+    final lower = text.toLowerCase();
+    if (lower.contains('droite')) return Icons.turn_right;
+    if (lower.contains('gauche')) return Icons.turn_left;
+    if (lower.contains('demi-tour') || lower.contains('uturn')) {
+      return Icons.u_turn_left;
+    }
+    if (lower.contains('rond-point') || lower.contains('sortie')) {
+      return Icons.roundabout_right;
+    }
+    if (lower.contains('arrivé') || lower.contains('destination')) {
+      return Icons.flag;
+    }
+    return Icons.straight;
+  }
+
+  void _startGuidance() {
+    if (_directionsResult == null || widget.currentPosition == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Impossible de démarrer : itinéraire ou position manquante'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    VoiceGuidanceService().startNavigation(
+      _directionsResult!,
+      widget.currentPosition!,
+    );
+  }
+
+  void _stopGuidance() {
+    VoiceGuidanceService().stopNavigation();
+    if (_directionsResult != null &&
+        _directionsResult!.polylinePoints.isNotEmpty) {
+      _fitMapToRoute(_directionsResult!.polylinePoints);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final vg = VoiceGuidanceService();
+    final isNavigating = vg.isNavigating;
+
     return Scaffold(
       appBar: AppBar(
-        title: Text('Itinéraire vers ${widget.destination.name}'),
-        backgroundColor: AppColors.primary,
+        title: Text(
+          isNavigating ? 'Guidage en cours...' : 'Itinéraire vers ${widget.destination.name}',
+        ),
+        backgroundColor: isNavigating ? const Color(0xFF0F172A) : AppColors.primary,
         foregroundColor: AppColors.textLight,
         actions: [
+          if (isNavigating)
+            IconButton(
+              icon: Icon(vg.isMuted ? Icons.volume_off : Icons.volume_up),
+              tooltip: vg.isMuted ? 'Activer la voix' : 'Couper la voix',
+              onPressed: () => vg.toggleMute(),
+            ),
           IconButton(
             icon: Icon(_showSteps ? Icons.map : Icons.list),
             onPressed: () {
@@ -333,14 +414,14 @@ class _RouteScreenState extends ConsumerState<RouteScreen> {
             )
           : Column(
               children: [
-                // Informations de l'itinéraire
+                // Panneau d'informations & contrôle
                 Container(
                   padding: EdgeInsets.all(AppDimensions.spacingM),
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
+                    color: isNavigating ? const Color(0xFF1E293B) : AppColors.surface,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
+                        color: Colors.black.withOpacity(0.12),
                         blurRadius: 4,
                         offset: const Offset(0, 2),
                       ),
@@ -350,8 +431,8 @@ class _RouteScreenState extends ConsumerState<RouteScreen> {
                     children: [
                       Icon(
                         _getTravelModeIcon(widget.travelMode),
-                        color: AppColors.primary,
-                        size: 30,
+                        color: isNavigating ? const Color(0xFF10B981) : AppColors.primary,
+                        size: 32,
                       ),
                       SizedBox(width: AppDimensions.spacingM),
                       Expanded(
@@ -359,9 +440,12 @@ class _RouteScreenState extends ConsumerState<RouteScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              _getTravelModeLabel(widget.travelMode),
+                              isNavigating
+                                  ? 'Navigation active (${_getTravelModeLabel(widget.travelMode)})'
+                                  : _getTravelModeLabel(widget.travelMode),
                               style: AppTextStyles.bodyLarge.copyWith(
                                 fontWeight: FontWeight.w600,
+                                color: isNavigating ? Colors.white : null,
                               ),
                             ),
                             if (_directionsResult != null) ...[
@@ -371,23 +455,36 @@ class _RouteScreenState extends ConsumerState<RouteScreen> {
                                   Icon(
                                     Icons.access_time,
                                     size: 16,
-                                    color: AppColors.textSecondary,
+                                    color: isNavigating
+                                        ? const Color(0xFF10B981)
+                                        : AppColors.textSecondary,
                                   ),
                                   SizedBox(width: AppDimensions.spacingXs),
                                   Text(
-                                    _directionsResult!.duration,
-                                    style: AppTextStyles.bodyMedium,
+                                    isNavigating
+                                        ? vg.remainingDuration
+                                        : _directionsResult!.duration,
+                                    style: AppTextStyles.bodyMedium.copyWith(
+                                      fontWeight: isNavigating ? FontWeight.bold : null,
+                                      color: isNavigating ? const Color(0xFF10B981) : null,
+                                    ),
                                   ),
                                   SizedBox(width: AppDimensions.spacingM),
                                   Icon(
                                     Icons.straighten,
                                     size: 16,
-                                    color: AppColors.textSecondary,
+                                    color: isNavigating
+                                        ? const Color(0xFF94A3B8)
+                                        : AppColors.textSecondary,
                                   ),
                                   SizedBox(width: AppDimensions.spacingXs),
                                   Text(
-                                    _directionsResult!.distance,
-                                    style: AppTextStyles.bodyMedium,
+                                    isNavigating
+                                        ? vg.remainingDistance
+                                        : _directionsResult!.distance,
+                                    style: AppTextStyles.bodyMedium.copyWith(
+                                      color: isNavigating ? const Color(0xFFE2E8F0) : null,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -395,30 +492,150 @@ class _RouteScreenState extends ConsumerState<RouteScreen> {
                           ],
                         ),
                       ),
-                      ElevatedButton(
-                        onPressed: _loadDirections,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: AppColors.textLight,
-                          padding: EdgeInsets.symmetric(
-                            horizontal: AppDimensions.spacingM,
-                            vertical: AppDimensions.spacingS,
+                      if (!isNavigating)
+                        ElevatedButton.icon(
+                          onPressed: _startGuidance,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF10B981), // Vert éclatant
+                            foregroundColor: Colors.white,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: AppDimensions.spacingM,
+                              vertical: AppDimensions.spacingS,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
+                          icon: const Icon(Icons.record_voice_over, size: 18),
+                          label: const Text(
+                            'Démarrer',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        )
+                      else
+                        ElevatedButton.icon(
+                          onPressed: _stopGuidance,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.error,
+                            foregroundColor: Colors.white,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: AppDimensions.spacingM,
+                              vertical: AppDimensions.spacingS,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          icon: const Icon(Icons.stop, size: 18),
+                          label: const Text('Arrêter'),
                         ),
-                        child: const Text('Démarrer'),
-                      ),
                     ],
                   ),
                 ),
 
                 // Contenu principal
-                Expanded(child: _showSteps ? _buildStepsList() : _buildMap()),
+                Expanded(
+                  child: _showSteps ? _buildStepsList() : _buildMap(isNavigating),
+                ),
               ],
             ),
     );
   }
 
-  Widget _buildMap() {
+  Widget _buildNavigationHUD() {
+    final vg = VoiceGuidanceService();
+
+    return Positioned(
+      top: 14,
+      left: 14,
+      right: 14,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0F172A),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.35),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+          border: Border.all(color: const Color(0xFF334155)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF10B981).withOpacity(0.4),
+                    blurRadius: 8,
+                  ),
+                ],
+              ),
+              child: Icon(
+                _getManeuverIcon(vg.currentInstruction),
+                color: Colors.white,
+                size: 26,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    vg.currentInstruction.isNotEmpty
+                        ? vg.currentInstruction
+                        : 'Suivre l\'itinéraire',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      height: 1.2,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Text(
+                        'Reste: ${vg.remainingDistance}',
+                        style: const TextStyle(
+                          color: Color(0xFF94A3B8),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text('•', style: TextStyle(color: Color(0xFF64748B))),
+                      const SizedBox(width: 8),
+                      Text(
+                        vg.remainingDuration,
+                        style: const TextStyle(
+                          color: Color(0xFF10B981),
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMap(bool isNavigating) {
     final initialPosition = widget.currentPosition != null
         ? LatLng(
             widget.currentPosition!.latitude,
@@ -426,35 +643,40 @@ class _RouteScreenState extends ConsumerState<RouteScreen> {
           )
         : LatLng(widget.destination.latitude, widget.destination.longitude);
 
-    return GoogleMap(
-      onMapCreated: (GoogleMapController controller) {
-        print('🗺️ Carte créée, configuration du contrôleur...');
-        _mapController = controller;
+    return Stack(
+      children: [
+        GoogleMap(
+          onMapCreated: (GoogleMapController controller) {
+            print('🗺️ Carte créée, configuration du contrôleur...');
+            _mapController = controller;
 
-        // Attendre un peu que la carte soit prête puis ajuster si nécessaire
-        Future.delayed(const Duration(milliseconds: 500), () {
-          if (_directionsResult != null &&
-              _directionsResult!.polylinePoints.isNotEmpty) {
-            print('🔄 Ajustement de la caméra après création de la carte');
-            _fitMapToRoute(_directionsResult!.polylinePoints);
-          }
-        });
-      },
-      initialCameraPosition: CameraPosition(
-        target: initialPosition,
-        zoom: 15.0,
-      ),
-      markers: _markers,
-      polylines: _polylines,
-      myLocationEnabled: true,
-      myLocationButtonEnabled: true,
-      zoomControlsEnabled: true,
-      mapType: MapType.normal,
-      onTap: (LatLng position) {
-        print(
-          '👆 Clic sur la carte: ${position.latitude}, ${position.longitude}',
-        );
-      },
+            Future.delayed(const Duration(milliseconds: 500), () {
+              if (_directionsResult != null &&
+                  _directionsResult!.polylinePoints.isNotEmpty) {
+                print('🔄 Ajustement de la caméra après création de la carte');
+                _fitMapToRoute(_directionsResult!.polylinePoints);
+              }
+            });
+          },
+          initialCameraPosition: CameraPosition(
+            target: initialPosition,
+            zoom: isNavigating ? 17.5 : 15.0,
+            tilt: isNavigating ? 45.0 : 0.0,
+          ),
+          markers: _markers,
+          polylines: _polylines,
+          myLocationEnabled: true,
+          myLocationButtonEnabled: true,
+          zoomControlsEnabled: !isNavigating,
+          mapType: MapType.normal,
+          onTap: (LatLng position) {
+            print(
+              '👆 Clic sur la carte: ${position.latitude}, ${position.longitude}',
+            );
+          },
+        ),
+        if (isNavigating) _buildNavigationHUD(),
+      ],
     );
   }
 

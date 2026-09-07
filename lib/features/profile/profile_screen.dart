@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/legacy.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/providers/app_providers.dart';
@@ -19,6 +18,7 @@ import 'pages/offline_settings_page.dart';
 import 'pages/help_page.dart';
 import 'pages/personal_info_page.dart';
 import 'pages/rewards_page.dart';
+import 'widgets/face_crop_screen.dart';
 import '../auth/screens/forgot_password_screen.dart';
 
 // Provider pour gérer l'état de l'utilisateur avec Firebase
@@ -41,6 +41,7 @@ class UserState {
   final String? name;
   final String? email;
   final String? uid;
+  final String? photoUrl;
   final bool isLoading;
 
   UserState({
@@ -48,16 +49,18 @@ class UserState {
     this.name,
     this.email,
     this.uid,
+    this.photoUrl,
     this.isLoading = false,
   });
 
-  get user => null;
+  dynamic get user => null;
 
   UserState copyWith({
     bool? isLoggedIn,
     String? name,
     String? email,
     String? uid,
+    String? photoUrl,
     bool? isLoading,
   }) {
     return UserState(
@@ -65,6 +68,7 @@ class UserState {
       name: name ?? this.name,
       email: email ?? this.email,
       uid: uid ?? this.uid,
+      photoUrl: photoUrl ?? this.photoUrl,
       isLoading: isLoading ?? this.isLoading,
     );
   }
@@ -77,21 +81,59 @@ class UserNotifier extends StateNotifier<UserState> {
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  void updatePhotoUrl(String? photoUrl) {
+    state = state.copyWith(photoUrl: photoUrl);
+  }
+
   void _initAuthListener() {
     _auth.authStateChanges().listen((User? user) async {
       if (user != null) {
+        final storageService = StorageService();
+        final cachedAvatar = storageService.getUserAvatar();
         state = state.copyWith(
           isLoggedIn: true,
           email: user.email,
           uid: user.uid,
           name: user.displayName ?? 'Utilisateur',
+          photoUrl: cachedAvatar ?? user.photoURL,
           isLoading: false,
         );
         await _syncWithBackend(user);
+        await _fetchAndSyncUserProfile();
       } else {
         await _restoreSessionFromJwtOrClear();
       }
     });
+  }
+
+  /// Charge et synchronise les détails du profil (nom, avatar) depuis le backend
+  Future<void> _fetchAndSyncUserProfile() async {
+    try {
+      final apiService = ApiService();
+      final storageService = StorageService();
+      final profile = await apiService.getUserProfile();
+      final rawAvatar = profile['avatar'] ??
+          profile['profile_image'] ??
+          _auth.currentUser?.photoURL;
+      // Normaliser l'URL de l'avatar (chemin relatif → URL absolue)
+      final avatar = rawAvatar != null
+          ? AppConstants.normalizeImageUrl(rawAvatar.toString())
+          : null;
+      final name = profile['prenom'] != null && profile['nom'] != null
+          ? '${profile['prenom']} ${profile['nom']}'.trim()
+          : (profile['name'] ?? _auth.currentUser?.displayName ?? 'Utilisateur');
+
+      if (avatar != null && avatar.isNotEmpty) {
+        await storageService.saveUserAvatar(avatar);
+      }
+
+      state = state.copyWith(
+        name: name.isEmpty ? 'Utilisateur' : name,
+        photoUrl: avatar,
+      );
+    } catch (e) {
+      _log('⚠️ Erreur fetch profile dans UserNotifier: $e');
+    }
   }
 
   /// Si pas de Firebase user : tenter restauration via JWT (Supabase). Sinon déconnecter.
@@ -102,6 +144,7 @@ class UserNotifier extends StateNotifier<UserState> {
     if (token == null || token.isEmpty) {
       state = UserState();
       await storageService.removeAuthToken();
+      await storageService.removeUserAvatar();
       apiService.clearAuthToken();
       return;
     }
@@ -111,16 +154,25 @@ class UserNotifier extends StateNotifier<UserState> {
       final name = profile['prenom'] != null && profile['nom'] != null
           ? '${profile['prenom']} ${profile['nom']}'.trim()
           : (profile['name'] ?? 'Utilisateur');
+      final rawAvatar = profile['avatar'] ?? profile['profile_image'];
+      final avatar = rawAvatar != null
+          ? AppConstants.normalizeImageUrl(rawAvatar.toString())
+          : null;
+      if (avatar != null && avatar.isNotEmpty) {
+        await storageService.saveUserAvatar(avatar);
+      }
       state = UserState(
         isLoggedIn: true,
         email: profile['email'] ?? '',
         uid: profile['id']?.toString(),
         name: name.isEmpty ? 'Utilisateur' : name,
+        photoUrl: avatar ?? storageService.getUserAvatar(),
         isLoading: false,
       );
     } catch (_) {
       state = UserState();
       await storageService.removeAuthToken();
+      await storageService.removeUserAvatar();
       apiService.clearAuthToken();
     }
   }
@@ -347,9 +399,11 @@ class UserNotifier extends StateNotifier<UserState> {
     try {
       final storageService = StorageService();
       await storageService.removeAuthToken();
+      await storageService.removeUserAvatar();
       final apiService = ApiService();
       apiService.clearAuthToken();
       await _auth.signOut();
+      state = UserState();
     } catch (e) {
       throw 'Erreur de déconnexion: $e';
     }
@@ -407,42 +461,206 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   Future<void> _loadProfileImage() async {
     try {
+      final storageService = StorageService();
+      final cachedAvatar = storageService.getUserAvatar();
+      if (cachedAvatar != null && mounted) {
+        setState(() {
+          _profileImageUrl = cachedAvatar;
+        });
+      }
+
       final apiService = ApiService();
       final profile = await apiService.getUserProfile();
+      final rawAvatarUrl = profile['avatar'] ??
+          profile['profile_image'] ??
+          FirebaseAuth.instance.currentUser?.photoURL;
+
+      // Normaliser l'URL (convertir chemin relatif /uploads/... en URL absolue)
+      final avatarUrl = rawAvatarUrl != null
+          ? AppConstants.normalizeImageUrl(rawAvatarUrl.toString())
+          : null;
+
+      if (avatarUrl != null && avatarUrl.isNotEmpty) {
+        await storageService.saveUserAvatar(avatarUrl);
+        if (mounted) {
+          ref.read(userProvider.notifier).updatePhotoUrl(avatarUrl);
+        }
+      }
+
       if (mounted) {
         setState(() {
-          // Le backend retourne 'avatar', mais on vérifie aussi 'profile_image' pour compatibilité
-          _profileImageUrl = profile['avatar'] ?? profile['profile_image'];
+          _profileImageUrl = avatarUrl ?? cachedAvatar;
         });
       }
     } catch (e) {
       _log('⚠️ Erreur lors du chargement de la photo de profil: $e');
-      // En cas d'erreur, on garde null pour afficher l'avatar par défaut
     }
   }
 
-  Future<void> _changeProfilePicture() async {
+  void _changeProfilePicture() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext context) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 44,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  const Text(
+                    'Photo de profil',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1E293B),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Ajustez et zoomez votre visage avec précision avant d\'enregistrer.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+                  ListTile(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    leading: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withOpacity(0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.camera_alt, color: AppColors.primary),
+                    ),
+                    title: const Text(
+                      'Prendre une photo',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    subtitle: const Text('Utiliser l\'appareil photo'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _pickAndCropImage(ImageSource.camera);
+                    },
+                  ),
+                  const SizedBox(height: 6),
+                  ListTile(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    leading: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.accent.withOpacity(0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.photo_library, color: AppColors.accent),
+                    ),
+                    title: const Text(
+                      'Choisir dans la galerie',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    subtitle: const Text('Sélectionner depuis la bibliothèque'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _pickAndCropImage(ImageSource.gallery);
+                    },
+                  ),
+                  if (_profileImageUrl != null) ...[
+                    const Divider(height: 24),
+                    ListTile(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      leading: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.delete_outline, color: Colors.red),
+                      ),
+                      title: const Text(
+                        'Supprimer la photo',
+                        style: TextStyle(
+                          color: Colors.red,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _removeProfilePicture();
+                      },
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _pickAndCropImage(ImageSource source) async {
     try {
       final ImagePicker picker = ImagePicker();
-      final XFile? image = await picker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 800,
-        maxHeight: 800,
-        imageQuality: 85,
+      final XFile? pickedFile = await picker.pickImage(
+        source: source,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 95,
       );
 
-      if (image == null) return;
+      if (pickedFile == null) return;
+
+      final File initialImage = File(pickedFile.path);
+
+      // Ouvrir l'écran interactif de recadrage et zoom du visage
+      if (!mounted) return;
+      final dynamic croppedResult = await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => FaceCropScreen(imageFile: initialImage),
+        ),
+      );
+
+      if (croppedResult == null || croppedResult is! File) {
+        return; // L'utilisateur a annulé le recadrage
+      }
+
+      final File finalCroppedFile = croppedResult;
 
       setState(() {
         _isLoadingProfile = true;
       });
 
-      // Uploader l'image
+      // Uploader l'image recadrée vers l'API
       final apiService = ApiService();
+      final storageService = StorageService();
       String imageUrl;
 
       try {
-        final uploadedUrl = await apiService.uploadImage(image.path);
+        final uploadedUrl = await apiService.uploadImage(finalCroppedFile.path);
         _log('✅ Image uploadée avec succès: $uploadedUrl');
 
         if (uploadedUrl.isEmpty) {
@@ -458,9 +676,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           });
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(
-                'Erreur lors de l\'upload de l\'image: $uploadError',
-              ),
+              content: Text('Erreur lors de l\'upload de l\'image: $uploadError'),
               backgroundColor: Colors.red,
               duration: const Duration(seconds: 4),
             ),
@@ -469,32 +685,34 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         return;
       }
 
-      // Mettre à jour le profil avec l'URL de l'image
+      // Mettre à jour le profil avec l'URL de l'image (Supabase + Firebase + cache local)
       try {
         await apiService.updateUserProfile(avatarUrl: imageUrl);
-        _log('✅ Profil mis à jour avec succès');
 
-        // Recharger le profil depuis l'API pour obtenir l'URL complète
-        try {
-          final updatedProfile = await apiService.getUserProfile();
-          if (mounted) {
-            setState(() {
-              _profileImageUrl =
-                  updatedProfile['avatar'] ??
-                  updatedProfile['profile_image'] ??
-                  imageUrl;
-              _isLoadingProfile = false;
-            });
+        // Firebase Auth n'accepte que des URLs HTTP courtes (< 2048 chars).
+        // On n'envoie à Firebase que si c'est une URL HTTP valide et courte.
+        if (imageUrl.startsWith('http') && imageUrl.length < 2000) {
+          try {
+            await FirebaseAuth.instance.currentUser?.updatePhotoURL(imageUrl);
+          } catch (fbError) {
+            _log('⚠️ Note Firebase Auth: $fbError');
           }
-        } catch (reloadError) {
-          _log('⚠️ Erreur lors du rechargement du profil: $reloadError');
-          // Utiliser l'URL uploadée directement si le rechargement échoue
-          if (mounted) {
-            setState(() {
-              _profileImageUrl = imageUrl;
-              _isLoadingProfile = false;
-            });
-          }
+        }
+
+        await storageService.saveUserAvatar(imageUrl);
+        ref.read(userProvider.notifier).updatePhotoUrl(imageUrl);
+
+        if (mounted) {
+          setState(() {
+            _profileImageUrl = imageUrl;
+            _isLoadingProfile = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Photo de profil ajustée et enregistrée avec succès'),
+              backgroundColor: Colors.green,
+            ),
+          );
         }
       } catch (updateError) {
         _log('❌ Erreur lors de la mise à jour du profil: $updateError');
@@ -512,17 +730,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
           );
         }
-        return;
-      }
-
-      // Afficher le message de succès
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Photo de profil mise à jour avec succès'),
-            backgroundColor: Colors.green,
-          ),
-        );
       }
     } catch (e, stackTrace) {
       _log('❌ Erreur complète: $e');
@@ -537,6 +744,49 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             content: Text('Erreur: ${e.toString()}'),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _removeProfilePicture() async {
+    try {
+      setState(() {
+        _isLoadingProfile = true;
+      });
+
+      final apiService = ApiService();
+      final storageService = StorageService();
+
+      await apiService.updateUserProfile(avatarUrl: '');
+      try {
+        await FirebaseAuth.instance.currentUser?.updatePhotoURL(null);
+      } catch (_) {}
+      await storageService.removeUserAvatar();
+      ref.read(userProvider.notifier).updatePhotoUrl(null);
+
+      if (mounted) {
+        setState(() {
+          _profileImageUrl = null;
+          _isLoadingProfile = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Photo de profil supprimée'),
+            backgroundColor: Colors.blueGrey,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingProfile = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur lors de la suppression: $e'),
+            backgroundColor: Colors.red,
           ),
         );
       }
@@ -650,6 +900,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       error: (_, __) => 0,
     );
 
+    final displayAvatarUrl = userState.photoUrl ?? _profileImageUrl;
+
     return SingleChildScrollView(
       child: Column(
         children: [
@@ -662,19 +914,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               children: [
                 Stack(
                   children: [
-                    CircleAvatar(
-                      radius: 50,
-                      backgroundColor: AppColors.textLight,
-                      backgroundImage: _profileImageUrl != null
-                          ? CachedNetworkImageProvider(_profileImageUrl!)
-                          : null,
-                      child: _profileImageUrl == null
-                          ? Icon(
-                              Icons.person,
-                              size: 50,
-                              color: AppColors.primary,
-                            )
-                          : null,
+                    GestureDetector(
+                      onTap: _isLoadingProfile ? null : _changeProfilePicture,
+                      child: CircleAvatar(
+                        radius: 50,
+                        backgroundColor: AppColors.textLight,
+                        backgroundImage: AppConstants.getImageProvider(displayAvatarUrl),
+                        child: AppConstants.getImageProvider(displayAvatarUrl) == null
+                            ? Icon(
+                                Icons.person,
+                                size: 50,
+                                color: AppColors.primary,
+                              )
+                            : null,
+                      ),
                     ),
                     if (_isLoadingProfile)
                       Positioned.fill(

@@ -1,7 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'dart:io';
 
 class AuthService {
   static final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -115,8 +114,14 @@ class AuthService {
   // Mettre à jour le profil
   Future<bool> updateProfile({String? displayName, String? photoURL}) async {
     try {
-      await _auth.currentUser?.updateDisplayName(displayName);
-      await _auth.currentUser?.updatePhotoURL(photoURL);
+      if (displayName != null) {
+        await _auth.currentUser?.updateDisplayName(displayName);
+      }
+      if (photoURL == null || (photoURL.startsWith('http') && photoURL.length < 2000)) {
+        try {
+          await _auth.currentUser?.updatePhotoURL(photoURL);
+        } catch (_) {}
+      }
       await _auth.currentUser?.reload();
       return true;
     } catch (e) {

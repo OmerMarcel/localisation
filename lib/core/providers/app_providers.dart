@@ -229,6 +229,18 @@ class InfrastructuresNotifier
   Future<void> refresh() async {
     await loadInfrastructures();
   }
+
+  /// Vide le cache Hive local et recharge depuis l'API
+  Future<void> clearLocalCache() async {
+    await _cacheService.clearAllCache();
+    // Forcer le rechargement depuis l'API
+    await loadInfrastructures();
+  }
+
+  /// Retourne les statistiques du cache local
+  Future<Map<String, dynamic>> getCacheStats() async {
+    return await _cacheService.getCacheStats();
+  }
 }
 
 final infrastructuresProvider =

@@ -252,6 +252,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   // Méthodes de recherche
   Future<void> _performSearch(String query) async {
     if (query.trim().isEmpty) {
+      if (!mounted) return;
       setState(() {
         _searchResults = [];
         _suggestions = [];
@@ -260,6 +261,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       return;
     }
 
+    if (!mounted) return;
     setState(() {
       _isSearching = true;
       _showSearchResults = true;
@@ -278,6 +280,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
       // Si on trouve des infrastructures correspondantes
       if (matchingInfrastructures.isNotEmpty) {
+        if (!mounted) return;
         setState(() {
           _isSearching = false;
           _showSearchResults = false;
@@ -285,19 +288,23 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         });
 
         // Afficher la liste de tous les résultats avec distance et temps
-        _showSearchResultsList(matchingInfrastructures, query);
+        if (mounted) {
+          _showSearchResultsList(matchingInfrastructures, query);
+        }
 
         return;
       }
 
       // 2️⃣ Si aucune infrastructure locale, chercher avec Google Places
       final results = await SearchService.searchPlaces(query);
+      if (!mounted) return;
       setState(() {
         _searchResults = results;
         _isSearching = false;
       });
     } catch (e) {
       print('Erreur de recherche: $e');
+      if (!mounted) return;
       setState(() {
         _isSearching = false;
       });
@@ -323,6 +330,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   Future<void> _getSuggestions(String query) async {
     if (query.trim().isEmpty) {
+      if (!mounted) return;
       setState(() {
         _suggestions = [];
       });
@@ -373,6 +381,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       }
     }
 
+    if (!mounted) return;
     setState(() {
       _suggestions = allSuggestions.take(10).toList();
     });
@@ -399,6 +408,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       });
     }
 
+    if (!mounted) return;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -697,6 +707,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final searchMarker = Marker(
       markerId: const MarkerId('search_result'),
       position: result.location,
+      anchor: const Offset(0.5, 1.0),
       infoWindow: InfoWindow(
         title: '📍 ${result.formattedAddress}',
         snippet: 'Résultat de recherche',
@@ -740,35 +751,47 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     _searchFocusNode.unfocus();
   }
 
+  /// Attend que `infrastructuresProvider` ait réellement des données (`data`)
+  /// pour éviter les différences de timing entre `flutter run` et `flutter build`.
+  Future<List<Infrastructure>> _waitForInfrastructuresData({
+    required Duration timeout,
+  }) async {
+    final startedAt = DateTime.now();
+
+    while (DateTime.now().difference(startedAt) < timeout) {
+      // `value` est `null` tant que le provider n'est pas en état `data`.
+      final data = ref.read(infrastructuresProvider).value;
+      if (data != null) return data;
+
+      await Future.delayed(const Duration(milliseconds: 250));
+    }
+
+    return ref.read(infrastructuresProvider).value ?? [];
+  }
+
   // 🔍 Rechercher toutes les infrastructures d'une catégorie spécifique
   Future<void> _searchNearestByCategory(String category) async {
-    // Attendre que les infrastructures soient chargées et la position obtenue
-    await Future.delayed(const Duration(milliseconds: 500));
+    final infrastructures = await _waitForInfrastructuresData(
+      timeout: const Duration(seconds: 10),
+    );
 
-    final infrastructures = ref.read(infrastructuresProvider).value ?? [];
     if (infrastructures.isEmpty) {
-      // Attendre un peu plus et réessayer
-      await Future.delayed(const Duration(seconds: 1));
-      final retryInfrastructures =
-          ref.read(infrastructuresProvider).value ?? [];
-      if (retryInfrastructures.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  Icon(Icons.error_outline, color: Colors.white, size: 20),
-                  SizedBox(width: AppDimensions.spacingS),
-                  Expanded(child: Text('❌ Aucune infrastructure disponible')),
-                ],
-              ),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 3),
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.white, size: 20),
+                SizedBox(width: AppDimensions.spacingS),
+                Expanded(child: Text('❌ Aucune infrastructure disponible')),
+              ],
             ),
-          );
-        }
-        return;
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 3),
+          ),
+        );
       }
+      return;
     }
 
     final normalizedCategory = _normalizeCategory(category);
@@ -1280,21 +1303,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
 
   void _updateUserMarker(Position position) {
-    final userMarker = Marker(
-      markerId: const MarkerId('user_location'),
-      position: LatLng(position.latitude, position.longitude),
-      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
-      infoWindow: const InfoWindow(
-        title: 'Ma position',
-        snippet: 'Vous êtes ici',
-      ),
-    );
-
     setState(() {
+      // Nettoyer tout marqueur statique pour laisser le voyant bleu officiel de Google Maps
       _markers.removeWhere(
         (marker) => marker.markerId.value == 'user_location',
       );
-      _markers.add(userMarker);
 
       if (widget.proximityMode) {
         _updateProximityCircle(position);
@@ -1474,6 +1487,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           markerId: MarkerId(infrastructure.id),
           position: LatLng(infrastructure.latitude, infrastructure.longitude),
           icon: markerIcon,
+          anchor: const Offset(0.5, 0.95),
           infoWindow: InfoWindow(
             title: infrastructure.name,
             snippet: isProximityInfrastructure

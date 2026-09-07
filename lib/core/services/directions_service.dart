@@ -4,27 +4,55 @@ import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 
 class DirectionsService {
-  /// Obtenir les directions entre deux points
+  /// Indicateur si la facturation Google Maps est bloquée (pour basculer directement sur OSRM)
+  static bool _googleBillingDenied = false;
+
+  /// Obtenir les directions entre deux points (Google Maps avec fallback transparent sur OSRM)
   static Future<DirectionsResult?> getDirections({
     required LatLng origin,
     required LatLng destination,
     String travelMode = 'DRIVING',
   }) async {
-    // Validation des paramètres
-    if (ApiConfig.googleMapsApiKey.isEmpty ||
-        ApiConfig.googleMapsApiKey == 'VOTRE_VRAIE_CLE_API_ICI') {
-      print('❌ Erreur: Clé API Google Maps non configurée dans ApiConfig');
-      return null;
-    }
-
     if (ApiConfig.isDebugMode) {
-      print('🧪 Test de l\'API Directions...');
+      print('🚀 Recherche d\'itinéraire...');
       print('📍 Origine: ${origin.latitude}, ${origin.longitude}');
-      print(
-        '🎯 Destination: ${destination.latitude}, ${destination.longitude}',
-      );
+      print('🎯 Destination: ${destination.latitude}, ${destination.longitude}');
+      print('🚗 Mode: $travelMode');
     }
 
+    // 1. Tenter Google Maps Directions si la clé est configurée et la facturation non bloquée
+    if (!_googleBillingDenied &&
+        ApiConfig.googleMapsApiKey.isNotEmpty &&
+        ApiConfig.googleMapsApiKey != 'VOTRE_VRAIE_CLE_API_ICI') {
+      try {
+        final result = await _getGoogleDirections(
+          origin: origin,
+          destination: destination,
+          travelMode: travelMode,
+        );
+        if (result != null) {
+          return result;
+        }
+      } catch (e) {
+        print('⚠️ Erreur Google Directions, bascule vers OSRM: $e');
+      }
+    }
+
+    // 2. Fallback automatique et gratuit : OSRM (Open Source Routing Machine)
+    print('🔄 Utilisation du service d\'itinéraire OSRM (OpenStreetMap)...');
+    return await _getOsrmDirections(
+      origin: origin,
+      destination: destination,
+      travelMode: travelMode,
+    );
+  }
+
+  /// Appel de l'API Google Maps Directions
+  static Future<DirectionsResult?> _getGoogleDirections({
+    required LatLng origin,
+    required LatLng destination,
+    required String travelMode,
+  }) async {
     try {
       final String url =
           '${ApiConfig.googleMapsBaseUrl}/directions/json'
@@ -35,13 +63,6 @@ class DirectionsService {
           '&language=fr'
           '&units=metric';
 
-      if (ApiConfig.isDebugMode) {
-        print(
-          '🔗 URL de l\'API Directions: ${url.replaceAll(ApiConfig.googleMapsApiKey, 'HIDDEN_API_KEY')}',
-        );
-      }
-
-      // Headers améliorés
       final Map<String, String> headers = {
         'User-Agent': 'LocalisationApp/1.0',
         'Accept': 'application/json',
@@ -50,26 +71,206 @@ class DirectionsService {
       final response = await http
           .get(Uri.parse(url), headers: headers)
           .timeout(
-            ApiConfig.apiTimeout,
+            const Duration(seconds: 4),
             onTimeout: () {
-              throw Exception('Timeout: L\'API met trop de temps à répondre');
+              throw Exception('Timeout Google Directions');
             },
           );
 
-      print('📡 Statut de la réponse: ${response.statusCode}');
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        final String status = data['status'] ?? 'UNKNOWN_ERROR';
+
+        if (status == 'OK') {
+          return _parseDirectionsResponse(data);
+        }
+
+        if (status == 'REQUEST_DENIED') {
+          _googleBillingDenied = true;
+          print('⚠️ Google Directions REQUEST_DENIED (Facturation requise sur Google Cloud).');
+          return null;
+        }
+      }
+      return null;
+    } catch (e) {
+      print('⚠️ Google Directions indisponible: $e');
+      return null;
+    }
+  }
+
+  /// Moteur de calcul d'itinéraire OSRM (100% gratuit, OpenStreetMap)
+  static Future<DirectionsResult?> _getOsrmDirections({
+    required LatLng origin,
+    required LatLng destination,
+    required String travelMode,
+  }) async {
+    try {
+      // Mapper le mode de transport pour OSRM (driving, bike, foot)
+      String profile = 'driving';
+      final modeLower = travelMode.toLowerCase();
+      if (modeLower.contains('bicycl') || modeLower.contains('bike')) {
+        profile = 'bike';
+      } else if (modeLower.contains('walk') || modeLower.contains('foot')) {
+        profile = 'foot';
+      }
+
+      // OSRM attend les coordonnées au format {longitude},{latitude}
+      final coordinates =
+          '${origin.longitude},${origin.latitude};${destination.longitude},${destination.latitude}';
+      final String url =
+          'https://router.project-osrm.org/route/v1/$profile/$coordinates?overview=full&geometries=polyline&steps=true';
+
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {'Accept': 'application/json'},
+      ).timeout(
+        const Duration(seconds: 6),
+        onTimeout: () {
+          throw Exception('Timeout OSRM');
+        },
+      );
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = json.decode(response.body);
-        return _parseDirectionsResponse(data);
-      } else {
-        print('❌ Erreur HTTP: ${response.statusCode}');
-        print('📄 Corps de la réponse: ${response.body}');
-        return null;
+        if (data['code'] == 'Ok' &&
+            data['routes'] != null &&
+            (data['routes'] as List).isNotEmpty) {
+          final result = _parseOsrmResponse(data, origin, destination);
+          print('✅ Itinéraire OSRM calculé avec succès (${result.distance}, ${result.duration}) !');
+          return result;
+        }
       }
+
+      // Si le profil spécifique (ex: bike) échoue, tenter en mode 'driving' par défaut
+      if (profile != 'driving') {
+        return await _getOsrmDirections(
+          origin: origin,
+          destination: destination,
+          travelMode: 'driving',
+        );
+      }
+
+      print('❌ Aucun itinéraire trouvé par OSRM');
+      return null;
     } catch (e) {
-      print('� Erreur lors de la récupération des directions: $e');
+      print('💥 Erreur lors du calcul d\'itinéraire OSRM: $e');
       return null;
     }
+  }
+
+  /// Parse la réponse OSRM en format unifié DirectionsResult
+  static DirectionsResult _parseOsrmResponse(
+    Map<String, dynamic> data,
+    LatLng origin,
+    LatLng destination,
+  ) {
+    final route = data['routes'][0];
+    final String polylineEncoded = route['geometry'] as String? ?? '';
+    final double distanceMeters = (route['distance'] as num?)?.toDouble() ?? 0.0;
+    final double durationSeconds = (route['duration'] as num?)?.toDouble() ?? 0.0;
+
+    // Décodage de la polyline
+    List<LatLng> polylinePoints = [];
+    if (polylineEncoded.isNotEmpty) {
+      polylinePoints = decodePolyline(polylineEncoded);
+    }
+    if (polylinePoints.isEmpty) {
+      polylinePoints = [origin, destination];
+    }
+
+    // Formatage texte de la distance
+    String distanceText;
+    if (distanceMeters < 1000) {
+      distanceText = '${distanceMeters.round()} m';
+    } else {
+      distanceText = '${(distanceMeters / 1000).toStringAsFixed(1)} km';
+    }
+
+    // Formatage texte de la durée
+    String durationText;
+    if (durationSeconds < 60) {
+      durationText = '< 1 min';
+    } else if (durationSeconds < 3600) {
+      durationText = '${(durationSeconds / 60).round()} min';
+    } else {
+      final hours = durationSeconds ~/ 3600;
+      final minutes = (durationSeconds % 3600 ~/ 60);
+      durationText = '$hours h ${minutes > 0 ? '$minutes min' : ''}'.trim();
+    }
+
+    // Extraire les étapes
+    List<DirectionStep> steps = [];
+    if (route['legs'] != null && (route['legs'] as List).isNotEmpty) {
+      final leg = route['legs'][0];
+      if (leg['steps'] != null) {
+        for (var s in leg['steps']) {
+          final stepDistanceMeters = (s['distance'] as num?)?.toDouble() ?? 0.0;
+          final stepDurationSec = (s['duration'] as num?)?.toDouble() ?? 0.0;
+          final name = s['name'] as String? ?? '';
+          final maneuverType = s['maneuver']?['type'] as String? ?? '';
+          final modifier = s['maneuver']?['modifier'] as String? ?? '';
+          final loc = s['maneuver']?['location'] as List?;
+
+          LatLng stepLoc = origin;
+          if (loc != null && loc.length >= 2) {
+            stepLoc = LatLng(
+              (loc[1] as num).toDouble(),
+              (loc[0] as num).toDouble(),
+            );
+          }
+
+          String instruction = name.isNotEmpty ? 'Suivre $name' : 'Continuer tout droit';
+          if (maneuverType == 'depart') {
+            instruction = name.isNotEmpty ? 'Prendre la direction de $name' : 'Démarrer l\'itinéraire';
+          } else if (maneuverType == 'turn') {
+            if (modifier == 'right' || modifier == 'sharp right') {
+              instruction = name.isNotEmpty ? 'Tourner à droite sur $name' : 'Tourner à droite';
+            } else if (modifier == 'slight right') {
+              instruction = name.isNotEmpty ? 'Prendre légèrement à droite sur $name' : 'Prendre légèrement à droite';
+            } else if (modifier == 'left' || modifier == 'sharp left') {
+              instruction = name.isNotEmpty ? 'Tourner à gauche sur $name' : 'Tourner à gauche';
+            } else if (modifier == 'slight left') {
+              instruction = name.isNotEmpty ? 'Prendre légèrement à gauche sur $name' : 'Prendre légèrement à gauche';
+            } else if (modifier == 'uturn') {
+              instruction = 'Faire demi-tour';
+            } else {
+              instruction = name.isNotEmpty ? 'Tourner sur $name' : 'Tourner';
+            }
+          } else if (maneuverType == 'roundabout' || maneuverType == 'rotary') {
+            instruction = name.isNotEmpty ? 'Au rond-point, suivre $name' : 'Au rond-point, prendre la sortie';
+          } else if (maneuverType == 'fork') {
+            instruction = modifier.contains('left') ? 'À la bifurcation, rester à gauche' : 'À la bifurcation, rester à droite';
+          } else if (maneuverType == 'arrive') {
+            instruction = 'Vous êtes arrivé à votre destination';
+          } else if (maneuverType == 'new name' || maneuverType == 'continue') {
+            instruction = name.isNotEmpty ? 'Continuer sur $name' : 'Continuer tout droit';
+          }
+
+          steps.add(
+            DirectionStep(
+              instruction: instruction,
+              distance: stepDistanceMeters < 1000
+                  ? '${stepDistanceMeters.round()} m'
+                  : '${(stepDistanceMeters / 1000).toStringAsFixed(1)} km',
+              duration: stepDurationSec < 60 ? '< 1 min' : '${(stepDurationSec / 60).round()} min',
+              startLocation: stepLoc,
+              endLocation: destination,
+              maneuver: maneuverType,
+            ),
+          );
+        }
+      }
+    }
+
+    return DirectionsResult(
+      polylineEncoded: polylineEncoded,
+      polylinePoints: polylinePoints,
+      distance: distanceText,
+      duration: durationText,
+      startAddress: 'Point de départ',
+      endAddress: 'Destination',
+      steps: steps,
+    );
   }
 
   /// Parse la réponse de l'API avec gestion d'erreurs robuste

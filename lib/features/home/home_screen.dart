@@ -10,6 +10,7 @@ import '../contribute/contribute_screen.dart';
 import '../notifications/notifications_screen.dart';
 import '../notifications/providers/notifications_provider.dart';
 import '../notifications/services/notification_initializer.dart';
+import '../../core/services/location_service.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -27,9 +28,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    // Initialiser les notifications FCM
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      NotificationInitializer.initialize(ref);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // 1. Demander et vérifier l'activation du GPS dès le premier lancement
+      await LocationService().ensureLocationReady(context);
+      // 2. Initialiser les notifications FCM
+      if (mounted) {
+        NotificationInitializer.initialize(ref);
+      }
     });
   }
 

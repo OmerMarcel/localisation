@@ -76,7 +76,6 @@ class _ContributeScreenState extends ConsumerState<ContributeScreen> {
     // Services Religieux
     {'value': 'eglise', 'label': 'Église'},
     {'value': 'mosquee', 'label': 'Mosquée'},
-    {'value': 'synagogue', 'label': 'Synagogue'},
     {'value': 'temple', 'label': 'Temple'},
 
     // Installations Sportives et Récréatives

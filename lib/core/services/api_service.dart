@@ -142,6 +142,9 @@ class ApiService {
         final data = jsonDecode(response.body);
         final list = (data is List ? data : data['data']) as List;
         return list.map((e) => Infrastructure.fromJson(e)).toList();
+      } else if (response.statusCode == 401) {
+        clearAuthToken();
+        throw Exception('Session expirée. Veuillez vous reconnecter.');
       } else {
         throw Exception('Erreur (${response.statusCode}): ${response.body}');
       }
@@ -222,7 +225,7 @@ class ApiService {
 
       // Lire le fichier et créer le MultipartFile avec le contentType explicite
       final fileBytes = await File(imagePath).readAsBytes();
-      final fileName = imagePath.split('/').last;
+      final fileName = imagePath.split(RegExp(r'[/\\]')).last;
 
       final file = http.MultipartFile(
         'image',
@@ -244,20 +247,47 @@ class ApiService {
       print('📤 Upload image - Response: $responseBody');
 
       if (streamed.statusCode == 200 || streamed.statusCode == 201) {
-        final data = jsonDecode(responseBody);
-        final url =
-            data['url'] ??
-            data['data']?['url'] ??
-            data['imageUrl'] ??
-            data['data']?['imageUrl'];
+        dynamic rawUrl;
+        try {
+          final data = jsonDecode(responseBody);
+          if (data is Map) {
+            rawUrl =
+                data['url'] ??
+                data['data']?['url'] ??
+                data['imageUrl'] ??
+                data['data']?['imageUrl'] ??
+                data['avatar'] ??
+                data['avatarUrl'] ??
+                data['image'] ??
+                data['data']?['image'] ??
+                data['photo'] ??
+                data['photoUrl'] ??
+                data['profile_image'] ??
+                data['base64'] ??
+                data['path'] ??
+                data['filename'] ??
+                (data['file'] is Map ? data['file']['filename'] : null) ??
+                (data['file'] is Map ? data['file']['url'] : null) ??
+                (data['file'] is String ? data['file'] : null);
+          } else if (data is String) {
+            rawUrl = data;
+          }
+        } catch (_) {
+          // Si la réponse n'est pas du JSON mais une URL ou base64 directe
+          if (responseBody.isNotEmpty) {
+            rawUrl = responseBody.trim();
+          }
+        }
 
-        if (url == null || url.toString().isEmpty) {
+        if (rawUrl == null || rawUrl.toString().trim().isEmpty) {
           throw Exception(
-            'L\'URL de l\'image n\'a pas été retournée par le serveur. Réponse: $responseBody',
+            'L\'URL ou image n\'a pas été retournée par le serveur. Réponse: $responseBody',
           );
         }
 
-        return url.toString();
+        final normalizedUrl = AppConstants.normalizeImageUrl(rawUrl.toString()) ?? rawUrl.toString();
+        print('✅ Image uploadée avec succès: ${normalizedUrl.length > 80 ? '${normalizedUrl.substring(0, 80)}...' : normalizedUrl}');
+        return normalizedUrl;
       } else {
         throw Exception(
           'Erreur upload (${streamed.statusCode}): $responseBody',
@@ -691,8 +721,16 @@ class ApiService {
       final response = await http.get(uri, headers: _headers);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        // Le backend retourne directement l'objet utilisateur
-        return data is Map ? data : data['data'] ?? data;
+        if (data is Map<String, dynamic>) {
+          if (data.containsKey('user') && data['user'] is Map<String, dynamic>) {
+            return Map<String, dynamic>.from(data['user']);
+          }
+          if (data.containsKey('data') && data['data'] is Map<String, dynamic>) {
+            return Map<String, dynamic>.from(data['data']);
+          }
+          return Map<String, dynamic>.from(data);
+        }
+        return {};
       } else {
         throw Exception('Erreur (${response.statusCode}): ${response.body}');
       }
@@ -728,7 +766,16 @@ class ApiService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return data is Map ? data : data['data'] ?? data;
+        if (data is Map<String, dynamic>) {
+          if (data.containsKey('user') && data['user'] is Map<String, dynamic>) {
+            return Map<String, dynamic>.from(data['user']);
+          }
+          if (data.containsKey('data') && data['data'] is Map<String, dynamic>) {
+            return Map<String, dynamic>.from(data['data']);
+          }
+          return Map<String, dynamic>.from(data);
+        }
+        return {};
       } else {
         throw Exception('Erreur (${response.statusCode}): ${response.body}');
       }

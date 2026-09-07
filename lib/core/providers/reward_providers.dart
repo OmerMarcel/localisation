@@ -1,5 +1,5 @@
-import 'package:flutter_riverpod/legacy.dart' show StateProvider;
-import 'package:riverpod/riverpod.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import '../models/user_rewards.dart';
 import '../models/level.dart';
 import '../models/badge.dart';

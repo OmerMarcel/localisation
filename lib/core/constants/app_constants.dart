@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 class AppConstants {
@@ -7,13 +10,13 @@ class AppConstants {
   static const String appDescription =
       'Géolocalisation des infrastructures de services publics à Cotonou';
 
-  // Base URL (émulateur Android -> hôte)
-  // ⚠️ IMPORTANT : Changez cette IP selon votre environnement
+  // Base URL - Backend déployé sur Render
+  // ⚠️ IMPORTANT : Backend en production sur Render
+  // Pour développement local, remplacez par :
   // - Émulateur Android : 'http://10.0.2.2:5000'
   // - Appareil physique (même WiFi) : 'http://VOTRE_IP_LOCALE:5000'
-  // Votre IP actuelle détectée : 10.50.28.189
   static const String baseUrl =
-      'http://10.50.28.189:5000'; // Backend local (appareil physique sur le meme WiFi)
+      'https://backend-cotonav.onrender.com'; // Backend production sur Render
 
   /// Supabase Auth (OTP, mot de passe oublié). Même projet que le backend.
   /// Override via --dart-define=SUPABASE_URL=... et SUPABASE_ANON_KEY=... si besoin.
@@ -26,6 +29,89 @@ class AppConstants {
     defaultValue:
         'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InllamxpZ3ljdGFsdmhyemVzanJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0MTE5MjQsImV4cCI6MjA3ODk4NzkyNH0.1tRmISHmictTP1VW4XTBTY9ehDZsTRUcGIfObazUJ9o',
   );
+
+  /// Vérifie si une chaîne est encodée en Base64 ou en Data URI
+  static bool isBase64(String? str) {
+    if (str == null || str.trim().isEmpty) return false;
+    final trimmed = str.trim();
+    if (trimmed.startsWith('data:image')) return true;
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('/uploads')) {
+      return false;
+    }
+    // Si la chaîne est longue et contient des caractères base64 sans URL http
+    if (trimmed.length > 50 && !trimmed.startsWith('/')) {
+      try {
+        final clean = trimmed.replaceAll('\n', '').replaceAll('\r', '').replaceAll(' ', '');
+        final decoded = base64Decode(clean);
+        return decoded.isNotEmpty;
+      } catch (_) {
+        return false;
+      }
+    }
+    return false;
+  }
+
+  /// Normalise les URL d'images (convertit les chemins relatifs /uploads/... en URL absolues avec le backend)
+  static String? normalizeImageUrl(String? url) {
+    if (url == null || url.trim().isEmpty) return url;
+    final trimmed = url.trim();
+    if (trimmed.startsWith('data:image') || isBase64(trimmed)) {
+      return trimmed;
+    }
+    final lower = trimmed.toLowerCase();
+    if (lower.startsWith('http://') || lower.startsWith('https://')) {
+      return trimmed;
+    }
+    var base = baseUrl;
+    final prefix = base.endsWith('/')
+        ? base.substring(0, base.length - 1)
+        : base;
+    final path = trimmed.startsWith('/') ? trimmed : '/$trimmed';
+    return '$prefix$path';
+  }
+
+  /// Retourne un ImageProvider adapté (CachedNetworkImage, MemoryImage pour base64, ou FileImage pour fichier local)
+  static ImageProvider? getImageProvider(String? imageSource) {
+    if (imageSource == null || imageSource.trim().isEmpty) return null;
+    final trimmed = imageSource.trim();
+
+    try {
+      // 1. Data URI Base64 (data:image/...;base64,XXXX)
+      if (trimmed.startsWith('data:image')) {
+        final commaIndex = trimmed.indexOf(',');
+        if (commaIndex != -1) {
+          final base64Data = trimmed.substring(commaIndex + 1);
+          final bytes = base64Decode(base64Data.replaceAll('\n', '').replaceAll('\r', '').replaceAll(' ', ''));
+          return MemoryImage(bytes);
+        }
+      }
+
+      // 2. Pure Base64 (longue chaîne sans protocole)
+      if (isBase64(trimmed)) {
+        final cleanBase64 = trimmed.replaceAll('\n', '').replaceAll('\r', '').replaceAll(' ', '');
+        final bytes = base64Decode(cleanBase64);
+        if (bytes.isNotEmpty) {
+          return MemoryImage(bytes);
+        }
+      }
+
+      // 3. Fichier local existant
+      if (trimmed.startsWith('/') && File(trimmed).existsSync()) {
+        return FileImage(File(trimmed));
+      }
+
+      // 4. URL HTTP / HTTPS distante
+      final normalizedUrl = normalizeImageUrl(trimmed);
+      if (normalizedUrl != null &&
+          (normalizedUrl.startsWith('http://') || normalizedUrl.startsWith('https://'))) {
+        return CachedNetworkImageProvider(normalizedUrl);
+      }
+    } catch (e) {
+      debugPrint('⚠️ Erreur getImageProvider: $e');
+    }
+
+    return null;
+  }
 
   // Endpoints
   static const String infrastructuresEndpoint = '/api/infrastructures';
@@ -92,11 +178,10 @@ class AppConstants {
     'Services de Transport': [
       'Gare',
       'Aéroport',
-      'Station de métro',
       'Arrêt de bus',
       'Station de taxi',
     ],
-    'Services Religieux': ['Église', 'Mosquée', 'Synagogue', 'Temple'],
+    'Services Religieux': ['Église', 'Mosquée', 'Temple'],
     'Services d\'Urgence et de Sécurité': [
       'Commissariat',
       'Caserne de pompiers',
@@ -104,15 +189,14 @@ class AppConstants {
       'Centre de secours',
     ],
     'Services Publics et Infrastructure': [
-      'Station d\'épuration',
+      'Eau et assainissement',
       'Centrale électrique',
-      'Déchetterie',
+      'Gestion des déchets et salubrité urbaine',
       'Station-service',
       'Parking public',
     ],
     'Services Sociaux et Communautaires': [
       'Centre social',
-      'Maison de retraite',
       'Crèche',
       'Centre de loisirs',
       'Association caritative',
@@ -191,14 +275,12 @@ class AppConstants {
     // Services de Transport
     'Gare': Icons.train,
     'Aéroport': Icons.flight,
-    'Station de métro': Icons.subway,
     'Arrêt de bus': Icons.directions_bus,
     'Station de taxi': Icons.local_taxi,
 
     // Services Religieux
     'Église': Icons.church,
     'Mosquée': Icons.mosque,
-    'Synagogue': Icons.synagogue,
     'Temple': Icons.temple_buddhist,
 
     // Services d'Urgence et de Sécurité
@@ -208,15 +290,14 @@ class AppConstants {
     'Centre de secours': Icons.health_and_safety,
 
     // Services Publics et Infrastructure
-    'Station d\'épuration': Icons.water_drop,
+    'Eau et assainissement': Icons.water_drop,
     'Centrale électrique': Icons.electrical_services,
-    'Déchetterie': Icons.delete,
+    'Gestion des déchets et salubrité urbaine': Icons.cleaning_services,
     'Station-service': Icons.local_gas_station,
     'Parking public': Icons.local_parking,
 
     // Services Sociaux et Communautaires
     'Centre social': Icons.people,
-    'Maison de retraite': Icons.elderly,
     'Crèche': Icons.child_care,
     'Centre de loisirs': Icons.sports_esports,
     'Association caritative': Icons.volunteer_activism,
@@ -225,6 +306,7 @@ class AppConstants {
   // Storage Keys
   static const String userTokenKey = 'user_token';
   static const String userProfileKey = 'user_profile';
+  static const String userAvatarKey = 'user_avatar_url';
   static const String favoritesKey = 'favorites';
   static const String offlineDataKey = 'offline_data';
   static const String languageKey = 'language';

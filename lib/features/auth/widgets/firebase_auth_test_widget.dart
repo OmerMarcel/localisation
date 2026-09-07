@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/services/auth_service.dart';
 import '../../../core/providers/auth_providers.dart';
 
 /// Widget de test pour l'authentification Firebase
@@ -46,9 +45,9 @@ class _FirebaseAuthTestWidgetState
       _nameController.text.trim(),
     );
 
-    if (result != null) {
+    if (result != null && result.user != null) {
       _addLog(
-        'Inscription réussie - UID: ${result.user?.uid?.substring(0, 8)}...',
+        'Inscription réussie - UID: ${result.user!.uid.substring(0, result.user!.uid.length > 8 ? 8 : result.user!.uid.length)}...',
       );
     } else {
       _addLog('Échec inscription', isError: true);

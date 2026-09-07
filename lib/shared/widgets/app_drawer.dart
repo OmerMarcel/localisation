@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/providers/app_providers.dart';
 import '../../core/constants/app_constants.dart';
-import '../../features/test/directions_test_screen.dart';
 import '../../features/profile/profile_screen.dart';
 import '../../features/profile/pages/favorites_page.dart';
 import '../../features/profile/pages/contributions_page.dart';
@@ -27,12 +26,11 @@ class AppDrawer extends ConsumerWidget {
     final favoritesCount = favorites.length;
 
     return Drawer(
-      child: ListView(
-        padding: EdgeInsets.zero,
+      child: Column(
         children: [
-          // En-tête personnalisé du drawer
+          // En-tête avec informations utilisateur
           Container(
-            height: 135,
+            width: double.infinity,
             decoration: BoxDecoration(gradient: AppColors.primaryGradient),
             child: SafeArea(
               child: Padding(
@@ -52,11 +50,14 @@ class AppDrawer extends ConsumerWidget {
                             backgroundColor: AppColors.textLight.withOpacity(
                               0.2,
                             ),
-                            child: Icon(
-                              Icons.person,
-                              size: 35,
-                              color: AppColors.textLight,
-                            ),
+                            backgroundImage: AppConstants.getImageProvider(userState.photoUrl),
+                            child: AppConstants.getImageProvider(userState.photoUrl) == null
+                                ? Icon(
+                                    Icons.person,
+                                    size: 35,
+                                    color: AppColors.textLight,
+                                  )
+                                : null,
                           ),
                           SizedBox(width: AppDimensions.spacingXs),
                           Expanded(
@@ -98,230 +99,208 @@ class AppDrawer extends ConsumerWidget {
             ),
           ),
 
-          // Section Services (toujours visible)
-          _buildSection('Services populaires', [
-            _buildMenuItem(
-              context,
-              Icons.near_me,
-              'Proximité',
-              subtitle: 'Infrastructures près de moi (1km)',
-              onTap: () {
-                Navigator.pop(context);
-                onNavigateToMapWithProximity?.call();
-              },
-            ),
-            // Favoris uniquement si connecté
-            if (userState.isLoggedIn)
-              _buildMenuItem(
-                context,
-                Icons.star,
-                'Favoris',
-                subtitle: 'Mes lieux préférés',
-                trailing: favoritesCount > 0
-                    ? Container(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: AppDimensions.spacingS,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.warning,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          favoritesCount.toString(),
-                          style: AppTextStyles.caption.copyWith(
-                            color: AppColors.textLight,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      )
-                    : null,
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const FavoritesPage(),
-                    ),
-                  );
-                },
-              ),
-            _buildMenuItem(
-              context,
-              Icons.download,
-              'Mode hors ligne',
-              subtitle: 'Cartes téléchargées',
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const OfflineSettingsPage(),
-                  ),
-                );
-              },
-            ),
-          ]),
-
-          // Section Mon activité (uniquement si connecté)
-          if (userState.isLoggedIn)
-            _buildSection('Mon activité', [
-              _buildMenuItem(
-                context,
-                Icons.add_location,
-                'Mes contributions',
-                subtitle: 'Lieux que j\'ai proposés',
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const ContributionsPage(),
-                    ),
-                  );
-                },
-              ),
-              _buildMenuItem(
-                context,
-                Icons.history,
-                'Historique',
-                subtitle: 'Mes activités récentes',
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const HistoryPage(),
-                    ),
-                  );
-                },
-              ),
-            ]),
-
-          // Section Paramètres
-          _buildSection('Paramètres', [
-            _buildMenuItem(
-              context,
-              Icons.settings,
-              'Paramètres',
-              onTap: () {
-                Navigator.pop(context);
-                _showSettingsBottomSheet(context, ref);
-              },
-            ),
-            // Notifications uniquement si connecté
-            /*if (userState.isLoggedIn)
-              _buildMenuItem(
-                context,
-                Icons.notifications,
-                'Notifications',
-                trailing: Switch(
-                  value: true,
-                  onChanged: (value) {
-                    _showSnackBar(
+          // Contenu scrollable et responsive
+          Expanded(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.symmetric(vertical: AppDimensions.spacingXs),
+              child: Column(
+                children: [
+                  // Section Services (toujours visible)
+                  _buildSection('Services populaires', [
+                    _buildMenuItem(
                       context,
-                      'Notifications ${value ? 'activées' : 'désactivées'}',
-                    );
-                  },
-                  activeColor: AppColors.primary,
-                ),
-                onTap: () {},
-              ),*/
-          ]),
-
-          // Section Aide & Support
-          _buildSection('Aide & Support', [
-            _buildMenuItem(
-              context,
-              Icons.help,
-              'Centre d\'aide',
-              onTap: () {
-                Navigator.pop(context);
-                _showSnackBar(context, 'Centre d\'aide');
-              },
-            ),
-            /*_buildMenuItem(
-              context,
-              Icons.bug_report,
-              'Test API Directions',
-              subtitle: 'Diagnostiquer les itinéraires',
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const DirectionsTestScreen(),
-                  ),
-                );
-              },
-            ),*/
-            _buildMenuItem(
-              context,
-              Icons.feedback,
-              'Commentaires',
-              onTap: () {
-                Navigator.pop(context);
-                _showFeedbackDialog(context);
-              },
-            ),
-            _buildMenuItem(
-              context,
-              Icons.info,
-              'À propos',
-              onTap: () {
-                Navigator.pop(context);
-                _showAboutDialog(context);
-              },
-            ),
-          ]),
-
-          // Bouton de connexion/déconnexion
-          Container(
-            margin: EdgeInsets.all(AppDimensions.spacingS),
-            child: userState.isLoggedIn
-                ? ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _showLogoutDialog(context, ref);
-                    },
-                    icon: const Icon(Icons.logout),
-                    label: const Text('Se déconnecter'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.error,
-                      foregroundColor: AppColors.textLight,
-                      padding: EdgeInsets.symmetric(
-                        vertical: AppDimensions.spacingS,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(
-                          AppDimensions.radiusM,
-                        ),
-                      ),
+                      Icons.near_me,
+                      'Proximité',
+                      subtitle: 'Infrastructures près de moi (1km)',
+                      onTap: () {
+                        Navigator.pop(context);
+                        onNavigateToMapWithProximity?.call();
+                      },
                     ),
-                  )
-                : ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      onNavigateToProfile?.call();
-                    },
-                    icon: const Icon(Icons.login),
-                    label: const Text('Se connecter'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: AppColors.textLight,
-                      padding: EdgeInsets.symmetric(
-                        vertical: AppDimensions.spacingS,
+                    // Favoris uniquement si connecté
+                    if (userState.isLoggedIn)
+                      _buildMenuItem(
+                        context,
+                        Icons.star,
+                        'Favoris',
+                        subtitle: 'Mes lieux préférés',
+                        trailing: favoritesCount > 0
+                            ? Container(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: AppDimensions.spacingS,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.warning,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  favoritesCount.toString(),
+                                  style: AppTextStyles.caption.copyWith(
+                                    color: AppColors.textLight,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              )
+                            : null,
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const FavoritesPage(),
+                            ),
+                          );
+                        },
                       ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(
-                          AppDimensions.radiusM,
-                        ),
-                      ),
+                    _buildMenuItem(
+                      context,
+                      Icons.download,
+                      'Mode hors ligne',
+                      subtitle: 'Cartes téléchargées',
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const OfflineSettingsPage(),
+                          ),
+                        );
+                      },
                     ),
-                  ),
+                  ]),
+
+                  // Section Mon activité (uniquement si connecté)
+                  if (userState.isLoggedIn)
+                    _buildSection('Mon activité', [
+                      _buildMenuItem(
+                        context,
+                        Icons.add_location,
+                        'Mes contributions',
+                        subtitle: 'Lieux que j\'ai proposés',
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const ContributionsPage(),
+                            ),
+                          );
+                        },
+                      ),
+                      _buildMenuItem(
+                        context,
+                        Icons.history,
+                        'Historique',
+                        subtitle: 'Mes activités récentes',
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const HistoryPage(),
+                            ),
+                          );
+                        },
+                      ),
+                    ]),
+
+                  // Section Paramètres
+                  _buildSection('Paramètres', [
+                    _buildMenuItem(
+                      context,
+                      Icons.settings,
+                      'Paramètres',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _showSettingsBottomSheet(context, ref);
+                      },
+                    ),
+                  ]),
+
+                  // Section Aide & Support
+                  _buildSection('Aide & Support', [
+                    _buildMenuItem(
+                      context,
+                      Icons.help,
+                      'Centre d\'aide',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _showSnackBar(context, 'Centre d\'aide');
+                      },
+                    ),
+                    _buildMenuItem(
+                      context,
+                      Icons.feedback,
+                      'Commentaires',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _showFeedbackDialog(context);
+                      },
+                    ),
+                    _buildMenuItem(
+                      context,
+                      Icons.info,
+                      'À propos',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _showAboutDialog(context);
+                      },
+                    ),
+                  ]),
+                ],
+              ),
+            ),
           ),
 
-          SizedBox(height: AppDimensions.spacingS),
+          // Bouton de connexion/déconnexion
+          SafeArea(
+            top: false,
+            child: Container(
+              margin: EdgeInsets.all(AppDimensions.spacingS),
+              child: userState.isLoggedIn
+                  ? ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _showLogoutDialog(context, ref);
+                      },
+                      icon: const Icon(Icons.logout),
+                      label: const Text('Se déconnecter'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.error,
+                        foregroundColor: AppColors.textLight,
+                        padding: EdgeInsets.symmetric(
+                          vertical: AppDimensions.spacingS,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(
+                            AppDimensions.radiusM,
+                          ),
+                        ),
+                      ),
+                    )
+                  : ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        onNavigateToProfile?.call();
+                      },
+                      icon: const Icon(Icons.login),
+                      label: const Text('Se connecter'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: AppColors.textLight,
+                        padding: EdgeInsets.symmetric(
+                          vertical: AppDimensions.spacingS,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(
+                            AppDimensions.radiusM,
+                          ),
+                        ),
+                      ),
+                    ),
+            ),
+          ),
         ],
       ),
     );

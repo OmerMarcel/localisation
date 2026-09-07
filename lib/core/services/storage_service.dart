@@ -94,6 +94,25 @@ class StorageService {
     await _prefs?.remove(AppConstants.userProfileKey);
   }
 
+  /// Gestion de l'avatar utilisateur
+  Future<void> saveUserAvatar(String avatarUrl) async {
+    if (_prefs == null) {
+      await init();
+    }
+    await _prefs?.setString(AppConstants.userAvatarKey, avatarUrl);
+  }
+
+  String? getUserAvatar() {
+    return _prefs?.getString(AppConstants.userAvatarKey);
+  }
+
+  Future<void> removeUserAvatar() async {
+    if (_prefs == null) {
+      await init();
+    }
+    await _prefs?.remove(AppConstants.userAvatarKey);
+  }
+
   /// Gestion des favoris par utilisateur
   String _getFavoritesKey(String? userId) {
     if (userId == null || userId.isEmpty) {
