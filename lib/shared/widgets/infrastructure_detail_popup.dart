@@ -694,6 +694,15 @@ class _InfrastructureDetailPopupState
       'saturday',
       'sunday',
     ];
+    final frenchDays = [
+      'lundi',
+      'mardi',
+      'mercredi',
+      'jeudi',
+      'vendredi',
+      'samedi',
+      'dimanche',
+    ];
     final dayNames = [
       'Lundi',
       'Mardi',
@@ -704,11 +713,17 @@ class _InfrastructureDetailPopupState
       'Dimanche',
     ];
 
+    final openingHoursMap = widget.infrastructure.openingHours;
+
     return daysOfWeek.asMap().entries.map((entry) {
       final index = entry.key;
-      final day = entry.value;
+      final dayEn = entry.value;
+      final dayFr = frenchDays[index];
       final dayName = dayNames[index];
-      final hours = widget.infrastructure.openingHours[day];
+      final hours = openingHoursMap[dayEn] ??
+          openingHoursMap[dayFr] ??
+          openingHoursMap[dayFr.toLowerCase()] ??
+          openingHoursMap[dayName.toLowerCase()];
       final isToday = _isToday(index);
 
       return Container(
@@ -753,15 +768,43 @@ class _InfrastructureDetailPopupState
 
   String _formatOpeningHours(dynamic hours) {
     if (hours == null) return 'Fermé';
-    if (hours is String) return hours;
+    if (hours is String) {
+      final trimmed = hours.trim();
+      return trimmed.isEmpty ? 'Fermé' : trimmed;
+    }
     if (hours is Map) {
-      final open = hours['open'];
-      final close = hours['close'];
-      if (open != null && close != null) {
-        return '$open - $close';
+      // Si ouvert est faux, l'établissement est fermé
+      if (hours['ouvert'] == false || hours['open'] == false || hours['is_open'] == false) {
+        return 'Fermé';
+      }
+
+      // Format français (debut - fin) ou anglais (open - close)
+      final debut = hours['debut'] ?? hours['open'] ?? hours['start'];
+      final fin = hours['fin'] ?? hours['close'] ?? hours['end'];
+
+      if (debut != null && fin != null) {
+        final d = debut.toString().trim();
+        final f = fin.toString().trim();
+        if (d.isNotEmpty && f.isNotEmpty) {
+          return '$d - $f';
+        }
+      }
+
+      if (debut != null && debut.toString().trim().isNotEmpty) {
+        return 'Dès ${debut.toString().trim()}';
+      }
+
+      final text = hours['text'] ?? hours['label'] ?? hours['description'];
+      if (text != null && text.toString().trim().isNotEmpty) {
+        return text.toString().trim();
+      }
+
+      // Si ouvert est vrai mais pas d'heures précises
+      if (hours['ouvert'] == true || hours['open'] == true) {
+        return 'Ouvert';
       }
     }
-    return 'Non renseigné';
+    return 'Fermé';
   }
 
   Widget _buildDescription() {
