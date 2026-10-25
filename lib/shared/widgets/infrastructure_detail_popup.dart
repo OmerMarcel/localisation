@@ -512,9 +512,15 @@ class _InfrastructureDetailPopupState
 
   Uint8List _decodeDataImage(String dataUrl) {
     try {
-      final base64Part = dataUrl.split('base64,').last;
+      final base64Part = dataUrl
+          .split('base64,')
+          .last
+          .replaceAll('\n', '')
+          .replaceAll('\r', '')
+          .replaceAll(' ', '');
       return base64Decode(base64Part);
-    } catch (_) {
+    } catch (e) {
+      debugPrint('⚠️ Erreur décodage image base64: $e');
       return Uint8List(0);
     }
   }

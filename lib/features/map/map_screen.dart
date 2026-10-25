@@ -1186,6 +1186,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       _isLoading = true;
     });
 
+    _markerLabelCache.clear();
+    _markerLabelLoading.clear();
+
     try {
       // En mode proximité, toujours utiliser le filtre de rayon
       // Sinon, si _loadAllInfrastructures est true, charger toutes les infrastructures sans filtre de rayon
@@ -1698,7 +1701,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
 
   BitmapDescriptor _getLabeledMarkerIcon(Infrastructure infrastructure) {
-    final cached = _markerLabelCache[infrastructure.id];
+    final key = '${infrastructure.id}_${infrastructure.name}';
+    final cached = _markerLabelCache[key];
     if (cached != null) {
       return cached;
     }
@@ -1708,7 +1712,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
 
   Future<void> _ensureLabeledMarkerIcon(Infrastructure infrastructure) async {
-    final key = infrastructure.id;
+    final key = '${infrastructure.id}_${infrastructure.name}';
     if (_markerLabelCache.containsKey(key) ||
         _markerLabelLoading.contains(key)) {
       return;
