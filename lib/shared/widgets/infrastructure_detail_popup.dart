@@ -770,11 +770,35 @@ class _InfrastructureDetailPopupState
     if (hours == null) return 'Fermé';
     if (hours is String) {
       final trimmed = hours.trim();
-      return trimmed.isEmpty ? 'Fermé' : trimmed;
+      final lower = trimmed.toLowerCase();
+      if (lower == 'fermé' || lower == 'ferme' || lower == 'closed' || trimmed.isEmpty) {
+        return 'Fermé';
+      }
+      return trimmed;
     }
     if (hours is Map) {
-      // Si ouvert est faux, l'établissement est fermé
-      if (hours['ouvert'] == false || hours['open'] == false || hours['is_open'] == false) {
+      final ouvert = hours['ouvert'];
+      final isOpen = hours['is_open'] ?? hours['isOpen'];
+      final open = hours['open'];
+
+      // Si ouvert est faux sous n'importe quelle forme (bool, string, int), le jour est fermé
+      if (ouvert == false || ouvert == 'false' || ouvert == 0 ||
+          isOpen == false || isOpen == 'false' || isOpen == 0 ||
+          open == false || open == 'false') {
+        return 'Fermé';
+      }
+
+      // Si text ou label indique explicitement Fermé
+      final text = (hours['text'] ?? hours['label'] ?? hours['description'])?.toString().trim();
+      if (text != null && text.isNotEmpty) {
+        final lower = text.toLowerCase();
+        if (lower == 'fermé' || lower == 'ferme' || lower == 'closed') {
+          return 'Fermé';
+        }
+      }
+
+      // Si le jour n'a pas été explicitement marqué comme ouvert
+      if (ouvert != true && ouvert != 'true' && isOpen != true && open != true && open == null && hours['debut'] == null) {
         return 'Fermé';
       }
 
@@ -785,22 +809,20 @@ class _InfrastructureDetailPopupState
       if (debut != null && fin != null) {
         final d = debut.toString().trim();
         final f = fin.toString().trim();
-        if (d.isNotEmpty && f.isNotEmpty) {
+        if (d.isNotEmpty && f.isNotEmpty && d != 'null' && f != 'null') {
           return '$d - $f';
         }
       }
 
-      if (debut != null && debut.toString().trim().isNotEmpty) {
+      if (debut != null && debut.toString().trim().isNotEmpty && debut.toString() != 'null') {
         return 'Dès ${debut.toString().trim()}';
       }
 
-      final text = hours['text'] ?? hours['label'] ?? hours['description'];
-      if (text != null && text.toString().trim().isNotEmpty) {
-        return text.toString().trim();
+      if (text != null && text.isNotEmpty) {
+        return text;
       }
 
-      // Si ouvert est vrai mais pas d'heures précises
-      if (hours['ouvert'] == true || hours['open'] == true) {
+      if (ouvert == true || ouvert == 'true' || isOpen == true || open == true) {
         return 'Ouvert';
       }
     }
